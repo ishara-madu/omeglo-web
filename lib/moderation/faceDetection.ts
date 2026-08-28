@@ -73,7 +73,7 @@ export async function detectFace(videoElement: HTMLVideoElement): Promise<{ hasF
       }
     }
 
-    // 2. Fast Lightweight Canvas Brightness & Feature Verification
+    // 2. Relaxed & Smart Canvas Feature / Human Presence Analyzer
     const canvas = document.createElement("canvas");
     canvas.width = 160;
     canvas.height = 120;
@@ -96,8 +96,12 @@ export async function detectFace(videoElement: HTMLVideoElement): Promise<{ hasF
       const luminance = 0.299 * r + 0.587 * g + 0.114 * b;
       totalLuminance += luminance;
 
-      // Skin-tone color space detection rule
-      if (r > 60 && g > 40 && b > 20 && r > g && r > b && (Math.max(r, g, b) - Math.min(r, g, b)) > 15 && Math.abs(r - g) > 15) {
+      // Relaxed multi-tone human presence & skin detection (supports distance, dim light & diverse tones)
+      const isSkinTone =
+        (r > 45 && g > 30 && b > 15 && r >= g && r >= b && (Math.max(r, g, b) - Math.min(r, g, b)) > 8) ||
+        (r > 35 && g > 25 && b > 20 && Math.abs(r - g) > 6 && r > b);
+
+      if (isSkinTone) {
         skinPixelCount++;
       }
     }
@@ -105,17 +109,23 @@ export async function detectFace(videoElement: HTMLVideoElement): Promise<{ hasF
     const avgLuminance = totalLuminance / totalPixels;
     const skinRatio = skinPixelCount / totalPixels;
 
-    // Check if camera is completely dark (covered / wall) or has valid lighting & skin/face region
-    if (avgLuminance < 15) {
-      // Extremely dark / camera covered
+    // 1. Block only if camera is completely black / covered with tape/hand (Pitch black screen)
+    if (avgLuminance < 8) {
       return { hasFace: false, confidence: 0 };
     }
 
-    if (skinRatio > 0.04 && avgLuminance > 25 && avgLuminance < 240) {
-      return { hasFace: true, confidence: Math.min(0.9, skinRatio * 3) };
+    // 2. Relaxed threshold: Face even 1-2 meters away occupies ~1.2% - 2% of frame
+    if (skinRatio >= 0.012 && avgLuminance >= 12 && avgLuminance <= 252) {
+      return { hasFace: true, confidence: Math.min(0.95, skinRatio * 5) };
     }
 
-    return { hasFace: false, confidence: 0.2 };
+    // 3. If reasonable ambient lighting is present with slight presence, allow smoothly
+    if (avgLuminance >= 20 && avgLuminance <= 235 && skinRatio >= 0.008) {
+      return { hasFace: true, confidence: 0.75 };
+    }
+
+    // Camera pointing at empty flat white/black wall with 0 human skin
+    return { hasFace: false, confidence: 0.1 };
   } catch (err) {
     console.error("[-] Error during face detection:", err);
     return { hasFace: true, confidence: 0.7 }; // Fail open if error

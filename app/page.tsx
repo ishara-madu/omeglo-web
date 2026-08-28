@@ -998,6 +998,10 @@ export default function Home() {
 
   // Initialize Socket.io and PeerJS
   useEffect(() => {
+    // Pre-warm AI moderation models in background (Zero-delay readiness)
+    initNsfwDetector().catch(() => {});
+    initFaceDetector().catch(() => {});
+
     // 1. Check localStorage for preferences
     try {
       const savedGender = localStorage.getItem("omeglo_user_gender") as Gender;
@@ -1496,6 +1500,7 @@ export default function Home() {
 
           // Auto-report stranger immediately to D1
           socketRef.current?.emit("report-partner", {
+            targetPeerId: currentPartnerPeerIdRef.current,
             reason: "nudity",
             details: `AI Auto-Detected NSFW Stream (${remoteNsfw.topCategory}: ${(remoteNsfw.probability * 100).toFixed(0)}%)`,
           });
@@ -1519,7 +1524,7 @@ export default function Home() {
           );
         }
       }
-    }, 1800);
+    }, 1000);
 
     return () => clearInterval(interval);
   }, [status, chatMode, handleNext, showModerationAlert]);
