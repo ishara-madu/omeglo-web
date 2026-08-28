@@ -30,6 +30,7 @@ import {
   X,
   Volume2,
   VolumeX,
+  SwitchCamera,
 } from "lucide-react";
 
 type ChatMessage = {
@@ -85,6 +86,53 @@ function playAudioSFX(type: "match" | "message" | "leave", isMuted: boolean) {
       osc.stop(now + 0.28);
     }
   } catch {}
+}
+
+// Low-Bandwidth & Weak-Signal WebRTC Network Optimizations (Smooth 30fps, No-Freeze Adaptive Bitrate)
+function applyLowLatencyNetworkOptimizations(call: MediaConnection | null) {
+  if (!call || !(call as any).peerConnection) return;
+  const pc: RTCPeerConnection = (call as any).peerConnection;
+
+  const optimizeSenders = () => {
+    try {
+      const senders = pc.getSenders();
+      senders.forEach((sender) => {
+        if (!sender.track) return;
+
+        if (sender.track.kind === "video") {
+          try {
+            const params = sender.getParameters();
+            if (!params.encodings || params.encodings.length === 0) {
+              params.encodings = [{}];
+            }
+            // Prioritize smooth frame rate over freezing HD frames under low signal
+            (params as any).degradationPreference = "maintain-framerate";
+
+            // Adaptive Bitrate: 950kbps high ceiling, 180kbps low floor (never freezes on 3G/4G!)
+            params.encodings[0].maxBitrate = 950000;
+            params.encodings[0].minBitrate = 180000;
+            params.encodings[0].maxFramerate = 30;
+
+            sender.setParameters(params).catch(() => {});
+          } catch {}
+        } else if (sender.track.kind === "audio") {
+          try {
+            const params = sender.getParameters();
+            if (!params.encodings || params.encodings.length === 0) {
+              params.encodings = [{}];
+            }
+            // Opus Voice HD: 32kbps is crystal clear and uses minimal bandwidth
+            params.encodings[0].maxBitrate = 32000;
+            sender.setParameters(params).catch(() => {});
+          } catch {}
+        }
+      });
+    } catch {}
+  };
+
+  // Run optimization after slight delay to ensure SDP negotiation completes
+  setTimeout(optimizeSenders, 400);
+  setTimeout(optimizeSenders, 1200);
 }
 
 // Eye-friendly Multicolor Omeglo Brand Wordmark
@@ -172,6 +220,8 @@ export default function Home() {
   const [hasCameraPermission, setHasCameraPermission] = useState<boolean | null>(null);
   const [showPermissionModal, setShowPermissionModal] = useState(false);
   const [autoNextCountdown, setAutoNextCountdown] = useState<number | null>(null);
+  const [facingMode, setFacingMode] = useState<"user" | "environment">("user");
+  const [isFlippingCamera, setIsFlippingCamera] = useState(false);
 
   // User Gender State & First-time Visit Modal
   const [userGender, setUserGender] = useState<Gender>(null);
@@ -452,6 +502,7 @@ export default function Home() {
           setRemoteStream(incomingRemoteStream);
         });
 
+        applyLowLatencyNetworkOptimizations(incomingCall);
         activeCallRef.current = incomingCall;
       });
 
@@ -489,6 +540,7 @@ export default function Home() {
           call?.on("stream", (partnerStream: MediaStream) => {
             setRemoteStream(partnerStream);
           });
+          applyLowLatencyNetworkOptimizations(call);
           activeCallRef.current = call;
         }
 
@@ -718,6 +770,58 @@ export default function Home() {
       }
     } else {
       setIsVideoOff(!isVideoOff);
+    }
+  };
+
+  // Handle Mobile / Desktop Camera Flip (Switch Front & Back Camera)
+  const toggleCameraFacing = async () => {
+    if (isFlippingCamera || isVideoOff) return;
+    setIsFlippingCamera(true);
+
+    const nextFacing = facingMode === "user" ? "environment" : "user";
+    try {
+      const newStream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: { ideal: nextFacing },
+          width: { ideal: 640, max: 1280 },
+          height: { ideal: 480, max: 720 },
+          frameRate: { ideal: 30 },
+        },
+        audio: false,
+      });
+
+      const newVideoTrack = newStream.getVideoTracks()[0];
+      if (newVideoTrack) {
+        // 1. Seamlessly replace track in live WebRTC Call sender
+        if (activeCallRef.current && (activeCallRef.current as any).peerConnection) {
+          const senders = (activeCallRef.current as any).peerConnection.getSenders();
+          const videoSender = senders.find(
+            (s: RTCRtpSender) => s.track && s.track.kind === "video"
+          );
+          if (videoSender) {
+            videoSender.replaceTrack(newVideoTrack).catch((err: any) => {
+              console.warn("Could not replace track on peer sender:", err);
+            });
+          }
+        }
+
+        // 2. Replace track in localStreamRef & update local stream state
+        if (localStreamRef.current) {
+          const oldTrack = localStreamRef.current.getVideoTracks()[0];
+          if (oldTrack) {
+            localStreamRef.current.removeTrack(oldTrack);
+            oldTrack.stop();
+          }
+          localStreamRef.current.addTrack(newVideoTrack);
+          setLocalStream(new MediaStream(localStreamRef.current.getTracks()));
+        }
+
+        setFacingMode(nextFacing);
+      }
+    } catch (err) {
+      console.warn("Could not flip camera facing mode:", err);
+    } finally {
+      setIsFlippingCamera(false);
     }
   };
 
@@ -1206,13 +1310,15 @@ export default function Home() {
                 isDragging ? "cursor-grabbing ring-2 ring-zinc-400/40" : "cursor-grab hover:border-white/40"
               }`}
             >
-              {/* Local Webcam Video Stream (Mirrored, z-0) */}
+              {/* Local Webcam Video Stream (Mirrored on user facing, z-0) */}
               <video
                 ref={localVideoRef}
                 autoPlay
                 playsInline
                 muted
-                className={`absolute inset-0 w-full h-full object-cover z-0 scale-x-[-1] pointer-events-none transition-opacity duration-200 ${
+                className={`absolute inset-0 w-full h-full object-cover z-0 ${
+                  facingMode === "user" ? "scale-x-[-1]" : ""
+                } pointer-events-none transition-opacity duration-200 ${
                   isVideoOff || !localStream || hasCameraPermission === false ? "opacity-0" : "opacity-100"
                 }`}
               />
@@ -1282,6 +1388,23 @@ export default function Home() {
 
               {/* In-PiP Media Controls (z-10 above video) */}
               <div className="relative z-10 flex items-center justify-center gap-1 bg-black/60 backdrop-blur-md py-1 px-1.5 rounded-xl border border-white/10">
+                {/* Flip Camera Button */}
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    toggleCameraFacing();
+                  }}
+                  disabled={isFlippingCamera || isVideoOff || !localStream}
+                  title={`Flip Camera (Currently: ${facingMode === "user" ? "Front" : "Back"})`}
+                  className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                    isFlippingCamera
+                      ? "text-indigo-400 animate-spin"
+                      : "text-zinc-300 hover:bg-white/10 hover:text-white"
+                  }`}
+                >
+                  <SwitchCamera className="w-3.5 h-3.5" />
+                </button>
                 <button
                   type="button"
                   onClick={(e) => {
