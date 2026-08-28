@@ -28,6 +28,8 @@ import {
   Lock,
   Settings,
   X,
+  Volume2,
+  VolumeX,
 } from "lucide-react";
 
 type ChatMessage = {
@@ -40,6 +42,50 @@ type ChatMessage = {
 type ConnectionStatus = "idle" | "searching" | "connected" | "disconnected";
 type Gender = "male" | "female" | null;
 type MatchPreference = "any" | "female" | "male";
+
+// Synthesize pleasant zero-dependency Web Audio SFX (Match chime, Message bubble pop, Disconnect tone)
+function playAudioSFX(type: "match" | "message" | "leave", isMuted: boolean) {
+  if (isMuted || typeof window === "undefined") return;
+  try {
+    const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+
+    const now = ctx.currentTime;
+    if (type === "match") {
+      // Cheerful Two-Tone Match Chime (E5 659Hz -> B5 987Hz)
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(659.25, now);
+      osc.frequency.exponentialRampToValueAtTime(987.77, now + 0.12);
+      gain.gain.setValueAtTime(0.14, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.42);
+      osc.start(now);
+      osc.stop(now + 0.42);
+    } else if (type === "message") {
+      // Soft Bubble Pop (880Hz -> 1320Hz)
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(880, now);
+      osc.frequency.exponentialRampToValueAtTime(1320, now + 0.08);
+      gain.gain.setValueAtTime(0.12, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
+      osc.start(now);
+      osc.stop(now + 0.18);
+    } else if (type === "leave") {
+      // Gentle Disconnect Low Tone (440Hz -> 280Hz)
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(440, now);
+      osc.frequency.exponentialRampToValueAtTime(280, now + 0.14);
+      gain.gain.setValueAtTime(0.09, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.28);
+      osc.start(now);
+      osc.stop(now + 0.28);
+    }
+  } catch {}
+}
 
 // Eye-friendly Multicolor Omeglo Brand Wordmark
 function OmegloWordmark({ size = "text-[19px]" }: { size?: string }) {
@@ -115,6 +161,8 @@ export default function Home() {
   const [inputMessage, setInputMessage] = useState("");
   const [isMicMuted, setIsMicMuted] = useState(false);
   const [isVideoOff, setIsVideoOff] = useState(false);
+  const [isSoundMuted, setIsSoundMuted] = useState(false);
+  const [isStrangerTyping, setIsStrangerTyping] = useState(false);
   const [onlineCount, setOnlineCount] = useState("1");
   const [strangerGender, setStrangerGender] = useState<Gender>(null);
 
@@ -123,6 +171,7 @@ export default function Home() {
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
   const [hasCameraPermission, setHasCameraPermission] = useState<boolean | null>(null);
   const [showPermissionModal, setShowPermissionModal] = useState(false);
+  const [autoNextCountdown, setAutoNextCountdown] = useState<number | null>(null);
 
   // User Gender State & First-time Visit Modal
   const [userGender, setUserGender] = useState<Gender>(null);
@@ -145,6 +194,8 @@ export default function Home() {
   const socketRef = useRef<Socket | null>(null);
   const activeCallRef = useRef<MediaConnection | null>(null);
   const dataConnRef = useRef<DataConnection | null>(null);
+  const typingTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const myTypingDebounceRef = useRef<NodeJS.Timeout | null>(null);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const pipRef = useRef<HTMLDivElement>(null);
@@ -190,7 +241,7 @@ export default function Home() {
     }
   }, [remoteStream]);
 
-  // Setup PeerJS P2P DataChannel Connection for direct peer-to-peer live text chat
+  // Setup PeerJS P2P DataChannel Connection for direct peer-to-peer live text chat & typing indicators
   const setupDataConnection = useCallback((conn: DataConnection) => {
     dataConnRef.current = conn;
 
@@ -200,6 +251,24 @@ export default function Home() {
 
     conn.on("data", (data: unknown) => {
       if (typeof data === "string") {
+        // 1. Check if packet is typing status
+        try {
+          const parsed = JSON.parse(data);
+          if (parsed && parsed.type === "typing") {
+            setIsStrangerTyping(parsed.isTyping);
+            if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
+            if (parsed.isTyping) {
+              typingTimerRef.current = setTimeout(() => {
+                setIsStrangerTyping(false);
+              }, 2500);
+            }
+            return;
+          }
+        } catch {}
+
+        // 2. Regular Text Message
+        setIsStrangerTyping(false);
+        playAudioSFX("message", isSoundMuted);
         setMessages((prev) => [
           ...prev,
           {
@@ -214,12 +283,13 @@ export default function Home() {
 
     conn.on("close", () => {
       console.log("🔴 PeerJS P2P Data connection closed.");
+      setIsStrangerTyping(false);
     });
 
     conn.on("error", (err) => {
       console.warn("PeerJS DataConnection error:", err);
     });
-  }, []);
+  }, [isSoundMuted]);
 
   // Request & Initialize Local Real Camera and Microphone
   const initLocalStream = useCallback(async (): Promise<MediaStream | null> => {
@@ -232,11 +302,19 @@ export default function Home() {
       return null;
     }
 
-    // 1. Primary Attempt: Standard video & audio
+    // 1. Primary Attempt: High-performance 30fps video + Audio DSP (Echo Cancellation, Noise Suppression, AGC)
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { width: { ideal: 640 }, height: { ideal: 480 } },
-        audio: true,
+        video: {
+          width: { ideal: 640, max: 1280 },
+          height: { ideal: 480, max: 720 },
+          frameRate: { ideal: 30, max: 30 },
+        },
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
       });
       localStreamRef.current = stream;
       setLocalStream(stream);
@@ -244,13 +322,16 @@ export default function Home() {
       setShowPermissionModal(false);
       return stream;
     } catch (err1) {
-      console.warn("Attempt 1 (standard video+audio) failed:", err1);
+      console.warn("Attempt 1 (high-performance video+audio) failed:", err1);
 
-      // 2. Secondary Attempt: Loose constraints
+      // 2. Secondary Attempt: Standard constraints with audio processing
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
-          video: true,
-          audio: true,
+          video: { width: { ideal: 640 }, height: { ideal: 480 } },
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+          },
         });
         localStreamRef.current = stream;
         setLocalStream(stream);
@@ -258,12 +339,12 @@ export default function Home() {
         setShowPermissionModal(false);
         return stream;
       } catch (err2) {
-        console.warn("Attempt 2 (loose video+audio) failed:", err2);
+        console.warn("Attempt 2 (standard video+audio) failed:", err2);
 
         // 3. Tertiary Attempt: Video Only (in case no mic exists)
         try {
           const stream = await navigator.mediaDevices.getUserMedia({
-            video: true,
+            video: { width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 30 } },
             audio: false,
           });
           localStreamRef.current = stream;
@@ -291,6 +372,7 @@ export default function Home() {
       dataConnRef.current.close();
       dataConnRef.current = null;
     }
+    setIsStrangerTyping(false);
     setRemoteStream(null);
     if (remoteVideoRef.current) {
       remoteVideoRef.current.srcObject = null;
@@ -394,6 +476,7 @@ export default function Home() {
       cleanupCall();
       setStatus("connected");
       setStrangerGender(partnerGender);
+      playAudioSFX("match", isSoundMuted);
       addSystemMessage("Connected with a stranger! Say hi.");
 
       // Ensure local camera is streaming
@@ -420,11 +503,14 @@ export default function Home() {
     socket.on("partner-disconnected", () => {
       cleanupCall();
       setStatus("disconnected");
-      addSystemMessage("Stranger has disconnected.");
+      setAutoNextCountdown(3);
+      playAudioSFX("leave", isSoundMuted);
+      addSystemMessage("Stranger has disconnected. Finding next stranger in 3s...");
     });
 
     socket.on("chat-stopped", () => {
       cleanupCall();
+      setAutoNextCountdown(null);
       setStatus("disconnected");
       addSystemMessage("You have stopped the chat.");
     });
@@ -438,7 +524,7 @@ export default function Home() {
         localStreamRef.current.getTracks().forEach((track) => track.stop());
       }
     };
-  }, [addSystemMessage, cleanupCall, initLocalStream, setupDataConnection]);
+  }, [addSystemMessage, cleanupCall, initLocalStream, isSoundMuted, setupDataConnection]);
 
   // Request Camera automatically after onboarding / on mount
   useEffect(() => {
@@ -468,7 +554,7 @@ export default function Home() {
   // Auto-scroll chat
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  }, [messages, isStrangerTyping]);
 
   // Handle Dragging Events for Floating Self View (WhatsApp style)
   useEffect(() => {
@@ -563,6 +649,7 @@ export default function Home() {
 
   // Handle Stop Matchmaking
   const handleStop = useCallback(() => {
+    setAutoNextCountdown(null);
     if (status === "idle") return;
     socketRef.current?.emit("leave-chat");
     cleanupCall();
@@ -571,6 +658,7 @@ export default function Home() {
 
   // Handle Next (Skip Stranger & Find New Match - STRICT CAMERA ENFORCEMENT)
   const handleNext = useCallback(async () => {
+    setAutoNextCountdown(null);
     const stream = await initLocalStream();
     if (!stream || stream.getVideoTracks().length === 0) {
       setShowPermissionModal(true);
@@ -589,6 +677,23 @@ export default function Home() {
       });
     }
   }, [addSystemMessage, cleanupCall, initLocalStream, matchPreference, userGender]);
+
+  // Auto-Next Countdown Effect on Disconnect
+  useEffect(() => {
+    if (status !== "disconnected" || autoNextCountdown === null) return;
+
+    if (autoNextCountdown <= 0) {
+      setAutoNextCountdown(null);
+      handleNext();
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      setAutoNextCountdown((prev) => (prev !== null && prev > 0 ? prev - 1 : null));
+    }, 1000);
+
+    return () => clearTimeout(timer);
+  }, [status, autoNextCountdown, handleNext]);
 
   // Handle Mic Mute Toggle
   const toggleMic = () => {
@@ -640,6 +745,28 @@ export default function Home() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [status, handleNext, handleStart, showGenderModal, showPermissionModal]);
 
+  // Handle Input Change with Real-Time Typing Indicator Transmission
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    setInputMessage(val);
+
+    // Send typing broadcast to partner via PeerJS DataConnection
+    if (dataConnRef.current && dataConnRef.current.open && status === "connected") {
+      try {
+        dataConnRef.current.send(JSON.stringify({ type: "typing", isTyping: val.length > 0 }));
+      } catch {}
+
+      if (myTypingDebounceRef.current) clearTimeout(myTypingDebounceRef.current);
+      myTypingDebounceRef.current = setTimeout(() => {
+        if (dataConnRef.current && dataConnRef.current.open) {
+          try {
+            dataConnRef.current.send(JSON.stringify({ type: "typing", isTyping: false }));
+          } catch {}
+        }
+      }, 2000);
+    }
+  };
+
   // Handle Send Message via P2P DataChannel
   const handleSendMessage = (e: React.FormEvent) => {
     e.preventDefault();
@@ -647,9 +774,12 @@ export default function Home() {
 
     const msgText = inputMessage.trim();
 
-    // Send over P2P DataChannel if connected
+    // Reset typing status and send message
     if (dataConnRef.current && dataConnRef.current.open) {
-      dataConnRef.current.send(msgText);
+      try {
+        dataConnRef.current.send(JSON.stringify({ type: "typing", isTyping: false }));
+        dataConnRef.current.send(msgText);
+      } catch {}
     }
 
     const newMsg: ChatMessage = {
@@ -1010,15 +1140,41 @@ export default function Home() {
               </div>
             )}
 
-            {/* DISCONNECTED STATE */}
+            {/* DISCONNECTED STATE WITH AUTO-NEXT COUNTDOWN */}
             {status === "disconnected" && (
-              <div className="flex flex-col items-center gap-3 p-6 text-center select-none pointer-events-none z-0">
-                <div className="w-14 h-14 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-500">
+              <div className="flex flex-col items-center gap-3.5 p-6 text-center select-none z-10 max-w-xs animate-in fade-in">
+                <div className="w-14 h-14 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-400 shadow-inner">
                   <Info className="w-6 h-6 stroke-[1.5]" />
                 </div>
                 <div className="space-y-1">
-                  <p className="text-zinc-300 font-medium text-sm">Stranger Disconnected</p>
-                  <p className="text-zinc-500 text-xs">Press Next to meet someone else</p>
+                  <p className="text-zinc-200 font-semibold text-sm">Stranger Disconnected</p>
+                  {autoNextCountdown !== null ? (
+                    <div className="flex flex-col items-center gap-2.5 mt-2">
+                      <p className="text-xs text-indigo-400 font-medium flex items-center justify-center gap-1.5">
+                        <span className="inline-flex h-2 w-2 rounded-full bg-indigo-500 animate-ping" />
+                        <span>Finding next in <strong>{autoNextCountdown}s</strong>...</span>
+                      </p>
+                      <div className="flex items-center gap-2 mt-1">
+                        <button
+                          type="button"
+                          onClick={() => handleNext()}
+                          className="h-8 px-3.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 active:scale-95 text-white text-xs font-medium transition-all cursor-pointer flex items-center gap-1.5 shadow-xs"
+                        >
+                          <SkipForward className="w-3 h-3" />
+                          <span>Next Now</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setAutoNextCountdown(null)}
+                          className="h-8 px-3 rounded-lg border border-zinc-800 hover:bg-zinc-900 text-zinc-400 text-xs font-medium transition-all cursor-pointer"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-zinc-500 text-xs">Press Next to meet someone else</p>
+                  )}
                 </div>
               </div>
             )}
@@ -1321,14 +1477,28 @@ export default function Home() {
               </div>
             </div>
 
-            {/* Clear Chat Button */}
-            <button
-              onClick={handleClearChat}
-              title="Clear chat"
-              className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 transition-colors cursor-pointer"
-            >
-              <RotateCcw className="w-3.5 h-3.5" />
-            </button>
+            {/* Header Controls: Sound Toggle & Clear Chat */}
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => setIsSoundMuted(!isSoundMuted)}
+                title={isSoundMuted ? "Unmute Sound Effects" : "Mute Sound Effects"}
+                className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                  isSoundMuted
+                    ? "text-red-400 hover:bg-red-50"
+                    : "text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100"
+                }`}
+              >
+                {isSoundMuted ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
+              </button>
+              <button
+                onClick={handleClearChat}
+                title="Clear chat"
+                className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 transition-colors cursor-pointer"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+              </button>
+            </div>
           </div>
 
           {/* Chat Messages List */}
@@ -1365,6 +1535,21 @@ export default function Home() {
                 </div>
               );
             })}
+
+            {/* Live Stranger Typing Indicator Bubble */}
+            {isStrangerTyping && status === "connected" && (
+              <div className="flex flex-col items-start animate-in fade-in slide-in-from-bottom-1 duration-150">
+                <span className="text-[9px] text-indigo-500 font-medium px-1 mb-0.5">
+                  Stranger is typing...
+                </span>
+                <div className="bg-white border border-zinc-200/80 px-3 py-2 rounded-xl rounded-tl-2xs shadow-2xs flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-bounce" style={{ animationDelay: "0ms" }} />
+                  <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-bounce" style={{ animationDelay: "150ms" }} />
+                  <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-bounce" style={{ animationDelay: "300ms" }} />
+                </div>
+              </div>
+            )}
+
             <div ref={chatEndRef} />
           </div>
 
@@ -1374,7 +1559,7 @@ export default function Home() {
               ref={inputRef}
               type="text"
               value={inputMessage}
-              onChange={(e) => setInputMessage(e.target.value)}
+              onChange={handleInputChange}
               placeholder={
                 status === "connected"
                   ? "Type a message to stranger..."
