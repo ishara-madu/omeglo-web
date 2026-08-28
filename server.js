@@ -32,6 +32,9 @@ const activePairs = new Map();
 // userSessions: Map<socketId, { ip: string, peerId: string, fingerprint: object, gender: string, mode: string, isQuarantined: boolean }>
 const userSessions = new Map();
 
+// peerSessions: Map<peerId, { socketId, ip, fingerprint, gender, mode, lastActiveAt }>
+const peerSessions = new Map();
+
 // Helper: Extract real client IP
 function getClientIp(socket) {
   const forwarded = socket.handshake.headers["x-forwarded-for"];
@@ -208,6 +211,7 @@ io.on("connection", (socket) => {
 
     // Store user session for reporting and moderation lookup
     userSessions.set(socket.id, currentUser);
+    peerSessions.set(peerId, currentUser);
 
     // 3. Isolated Queue Selection
     let targetQueue;
@@ -264,28 +268,43 @@ io.on("connection", (socket) => {
     }
   });
 
-  // Event: User reports partner
-  socket.on("report-partner", async ({ reason, details }) => {
+  // Event: User reports partner (Locked to specific targetPeerId to prevent reporting newly matched innocents)
+  socket.on("report-partner", async ({ targetPeerId, reason, details }) => {
+    let targetSocketId = null;
+    let targetPeer = targetPeerId;
+    let targetSession = null;
+    let isCurrentlyActive = false;
+
     const pair = activePairs.get(socket.id);
-    if (!pair) {
-      return console.warn(`[-] Report received from ${socket.id} but no active partner found.`);
+
+    // 1. Check if the report is for the CURRENT active call
+    if (pair && (!targetPeerId || pair.partnerPeerId === targetPeerId)) {
+      targetSocketId = pair.partnerSocketId;
+      targetPeer = pair.partnerPeerId;
+      targetSession = userSessions.get(targetSocketId);
+      isCurrentlyActive = true;
+    } else if (targetPeerId) {
+      // 2. Stranger had already skipped or disconnected: look up targetPeer in persistent session registry
+      targetSession = peerSessions.get(targetPeerId);
+      if (targetSession) {
+        targetSocketId = targetSession.socketId;
+      }
     }
 
-    const partnerSocketId = pair.partnerSocketId;
-    const partnerPeerId = pair.partnerPeerId;
-    const mode = pair.mode;
+    if (!targetSession && !targetSocketId && !targetPeer) {
+      return console.warn(`[-] Report failed: could not locate target stranger (Peer: ${targetPeerId || "unknown"})`);
+    }
 
-    // Retrieve reported partner's session and rich device fingerprint
-    const partnerSession = userSessions.get(partnerSocketId);
-    const partnerSocket = io.sockets.sockets.get(partnerSocketId);
-    const partnerIp = partnerSession?.ip || (partnerSocket ? getClientIp(partnerSocket) : "unknown");
-    const partnerFingerprint = partnerSession?.fingerprint || {};
+    const partnerSocket = targetSocketId ? io.sockets.sockets.get(targetSocketId) : null;
+    const partnerIp = targetSession?.ip || (partnerSocket ? getClientIp(partnerSocket) : "unknown");
+    const partnerFingerprint = targetSession?.fingerprint || {};
+    const mode = targetSession?.mode || pair?.mode || "video";
 
-    // Save report and escalate partner to Toxic Shadow Quarantine Pool in D1
+    // Save report and accurately quarantine THAT SPECIFIC stranger
     const result = await d1.recordReportAndQuarantine({
       reporterSocketId: socket.id,
-      reportedSocketId: partnerSocketId,
-      reportedPeerId: partnerPeerId,
+      reportedSocketId: targetSocketId || "unknown",
+      reportedPeerId: targetPeer || "unknown",
       reason,
       details,
       mode,
@@ -294,15 +313,17 @@ io.on("connection", (socket) => {
     });
 
     console.log(
-      `[🛡️ PARTNER REPORTED & QUARANTINED] Reported: ${partnerSocketId} (IP: ${partnerIp}) | Quarantine: ${result.durationMinutes} mins`
+      `[🛡️ ACCURATE REPORT LOCKED] Target: Peer=${targetPeer} Socket=${targetSocketId} (IP: ${partnerIp}) | Quarantine: ${result.durationMinutes} mins`
     );
 
-    // Immediately sever active connection and notify partner
-    cleanupActivePair(socket.id);
-    removeFromAllQueues(socket.id);
-    if (partnerSocketId) {
-      removeFromAllQueues(partnerSocketId);
-      io.to(partnerSocketId).emit("partner-disconnected");
+    // Only sever the active call if we are still connected to THAT SPECIFIC reported partner
+    if (isCurrentlyActive && pair) {
+      cleanupActivePair(socket.id);
+      removeFromAllQueues(socket.id);
+      if (targetSocketId) {
+        removeFromAllQueues(targetSocketId);
+        io.to(targetSocketId).emit("partner-disconnected");
+      }
     }
 
     socket.emit("report-confirmed", { success: true, ...result });

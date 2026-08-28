@@ -314,6 +314,8 @@ export default function Home() {
   const localStreamRef = useRef<MediaStream | null>(null);
   const peerRef = useRef<any>(null);
   const myPeerIdRef = useRef<string | null>(null);
+  const currentPartnerPeerIdRef = useRef<string | null>(null);
+  const targetReportPeerIdRef = useRef<string | null>(null);
   const socketRef = useRef<Socket | null>(null);
   const activeCallRef = useRef<MediaConnection | null>(null);
   const dataConnRef = useRef<DataConnection | null>(null);
@@ -1030,6 +1032,7 @@ export default function Home() {
     // 4. Socket Matchmaking Events
     socket.on("match-found", async ({ partnerPeerId, partnerGender, initiator, mode }) => {
       console.log(`Match Found with Peer: ${partnerPeerId}, Initiator: ${initiator}, Mode: ${mode}`);
+      currentPartnerPeerIdRef.current = partnerPeerId;
       cleanupCall();
       setStatus("connected");
       setStrangerGender(partnerGender);
@@ -1329,20 +1332,23 @@ export default function Home() {
     }
   }, [addSystemMessage, assessNetworkQuality, chatMode, cleanupCall, initLocalStream, matchPreference, userGender]);
 
-  // Open Report Modal
+  // Open Report Modal (Locks target to the currently active stranger snapshot)
   const handleOpenReportModal = useCallback(() => {
-    if (status !== "connected") return;
+    if (status !== "connected" || !currentPartnerPeerIdRef.current) return;
+    targetReportPeerIdRef.current = currentPartnerPeerIdRef.current;
     setReportReason("nudity");
     setReportDetails("");
     setShowReportModal(true);
   }, [status]);
 
-  // Handle Report Submission (flags user, emits socket event, and skips)
+  // Handle Report Submission (Accurately reports the locked stranger snapshot)
   const handleSubmitReport = useCallback(() => {
     setIsSubmittingReport(true);
+    const targetPeerId = targetReportPeerIdRef.current || currentPartnerPeerIdRef.current;
 
-    // 1. Emit report event to backend
+    // 1. Emit report event with explicit targetPeerId to backend
     socketRef.current?.emit("report-partner", {
+      targetPeerId,
       reason: reportReason,
       details: reportDetails.trim(),
       timestamp: new Date().toISOString(),
@@ -1364,8 +1370,10 @@ export default function Home() {
     // 3. Add system message in chat
     addSystemMessage("You reported this stranger. Looking for a new match...");
 
-    // 4. Automatically skip to next stranger
-    handleNext();
+    // 4. Only skip if we are still connected to THAT same reported stranger
+    if (currentPartnerPeerIdRef.current === targetPeerId) {
+      handleNext();
+    }
   }, [addSystemMessage, handleNext, reportDetails, reportReason]);
 
   // Auto-Next Countdown Effect on Disconnect
