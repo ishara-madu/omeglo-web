@@ -52,6 +52,81 @@ type ChatMessage = {
 };
 
 type ConnectionStatus = "idle" | "searching" | "connected" | "disconnected";
+
+type UniversalSocket = {
+  emit: (event: string, data?: any) => void;
+  on: (event: string, fn: Function) => void;
+  close: () => void;
+  id?: string;
+};
+
+function createUniversalSocket(rawUrl: string): UniversalSocket {
+  const listeners: Record<string, Function[]> = {};
+
+  let wsUrl = rawUrl;
+  if (wsUrl.startsWith("http://")) {
+    wsUrl = wsUrl.replace("http://", "ws://");
+  } else if (wsUrl.startsWith("https://")) {
+    wsUrl = wsUrl.replace("https://", "wss://");
+  }
+
+  if (!wsUrl.includes("ws://") && !wsUrl.includes("wss://")) {
+    wsUrl = "wss://" + wsUrl;
+  }
+
+  console.log("Connecting Native WebSocket to Cloudflare Edge:", wsUrl);
+  const ws = new WebSocket(wsUrl);
+
+  ws.onopen = () => {
+    console.log("Native WebSocket Connected!");
+    (listeners["connect"] || []).forEach((fn) => fn());
+  };
+
+  ws.onmessage = (e) => {
+    try {
+      const parsed = JSON.parse(e.data);
+      const event = parsed.event;
+      const data = parsed.data;
+      if (event && listeners[event]) {
+        listeners[event].forEach((fn) => fn(data));
+      }
+    } catch (err) {
+      console.error("WS Parse error:", err);
+    }
+  };
+
+  ws.onclose = () => {
+    console.log("Native WebSocket Disconnected.");
+    (listeners["disconnect"] || []).forEach((fn) => fn());
+  };
+
+  ws.onerror = (err) => {
+    console.error("Native WebSocket Error:", err);
+    (listeners["error"] || []).forEach((fn) => fn(err));
+  };
+
+  return {
+    emit: (event: string, data?: any) => {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ event, data }));
+      } else {
+        const checkInterval = setInterval(() => {
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ event, data }));
+            clearInterval(checkInterval);
+          }
+        }, 100);
+      }
+    },
+    on: (event: string, fn: Function) => {
+      if (!listeners[event]) listeners[event] = [];
+      listeners[event].push(fn);
+    },
+    close: () => {
+      ws.close();
+    },
+  };
+}
 type Gender = "male" | "female" | null;
 type MatchPreference = "any" | "female" | "male";
 type NetworkQuality = "good" | "fair" | "poor" | "offline";
@@ -316,7 +391,7 @@ export default function Home() {
   const myPeerIdRef = useRef<string | null>(null);
   const currentPartnerPeerIdRef = useRef<string | null>(null);
   const targetReportPeerIdRef = useRef<string | null>(null);
-  const socketRef = useRef<Socket | null>(null);
+  const socketRef = useRef<any>(null);
   const activeCallRef = useRef<MediaConnection | null>(null);
   const dataConnRef = useRef<DataConnection | null>(null);
   const typingTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -951,14 +1026,12 @@ export default function Home() {
       setShowGenderModal(true);
     }
 
-    // 2. Initialize Socket.io Connection
-    const socket = io(SOCKET_URL, {
-      transports: ["websocket", "polling"],
-    });
+    // 2. Initialize Native Cloudflare Edge WebSocket Connection
+    const socket = createUniversalSocket(SOCKET_URL);
     socketRef.current = socket;
 
     socket.on("connect", () => {
-      console.log("Connected to Matchmaking server:", socket.id);
+      console.log("Connected to Cloudflare Edge Matchmaking Server!");
     });
 
     socket.on("online-count", (count: number) => {
