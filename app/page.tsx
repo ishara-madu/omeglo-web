@@ -106,12 +106,12 @@ function applyLowLatencyNetworkOptimizations(call: MediaConnection | null) {
               params.encodings = [{}];
             }
             // Prioritize smooth frame rate over freezing HD frames under low signal
-            (params as any).degradationPreference = "maintain-framerate";
+            params.degradationPreference = "maintain-framerate";
 
-            // Adaptive Bitrate: 950kbps high ceiling, 180kbps low floor (never freezes on 3G/4G!)
+            // Adaptive Bitrate: 950kbps high ceiling, fluid 30fps without stutter
             params.encodings[0].maxBitrate = 950000;
-            params.encodings[0].minBitrate = 180000;
             params.encodings[0].maxFramerate = 30;
+            params.encodings[0].scaleResolutionDownBy = 1.0;
 
             sender.setParameters(params).catch(() => {});
           } catch {}
