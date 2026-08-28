@@ -389,11 +389,11 @@ export default function Home() {
             {/* Brand Logo Icon */}
             <div className="w-13 h-13 rounded-2xl bg-zinc-50 border border-zinc-100 p-2 flex items-center justify-center mb-3.5 shadow-xs">
               <Image
-                src="/logo.svg"
+                src="/logo.webp"
                 alt="Omeglo Icon"
                 width={40}
                 height={40}
-                className="w-full h-full object-contain"
+                className="w-full h-full object-contain rounded-xl"
                 priority
               />
             </div>
@@ -485,10 +485,10 @@ export default function Home() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-15 flex items-center justify-between">
           {/* Brand Logo & Multicolor Wordmark */}
           <div className="flex items-center gap-2.5">
-            {/* Minimalist Vector Logo Icon (No text in image) */}
-            <div className="w-8.5 h-8.5 flex items-center justify-center transition-transform hover:scale-105">
+            {/* Minimalist Logo Icon (No text in image) */}
+            <div className="w-8.5 h-8.5 rounded-lg overflow-hidden flex items-center justify-center transition-transform hover:scale-105">
               <Image
-                src="/logo.svg"
+                src="/logo.webp"
                 alt="Omeglo Logo Mark"
                 width={34}
                 height={34}
