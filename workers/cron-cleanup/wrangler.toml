@@ -12,4 +12,4 @@ crons = ["0 0 * * *"]
 [[d1_databases]]
 binding = "DB"
 database_name = "omeglo-db"
-database_id = "your_d1_database_id"
+database_id = "d27489c7-8c4f-450e-b319-debfb7573f33"
