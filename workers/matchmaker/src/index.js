@@ -29,7 +29,27 @@ export class Matchmaker {
   async fetch(request) {
     const url = new URL(request.url);
 
-    // 1. Health check & status endpoint
+    // 1. WebSocket Upgrade Request (Must be checked first)
+    const upgradeHeader = (request.headers.get("Upgrade") || request.headers.get("upgrade") || "").toLowerCase();
+    if (upgradeHeader === "websocket") {
+      const pair = new WebSocketPair();
+      const [client, server] = Object.values(pair);
+
+      const clientIp =
+        request.headers.get("CF-Connecting-IP") ||
+        request.headers.get("x-forwarded-for") ||
+        "unknown";
+
+      await this.handleWebSocket(server, clientIp);
+
+      return new Response(null, {
+        status: 101,
+        webSocket: client,
+        headers: { "Access-Control-Allow-Origin": "*" },
+      });
+    }
+
+    // 2. HTTP Health check & status endpoint
     if (url.pathname === "/" || url.pathname === "/health") {
       return new Response(
         JSON.stringify(
@@ -53,26 +73,6 @@ export class Matchmaker {
           },
         }
       );
-    }
-
-    // 2. WebSocket Upgrade Request
-    const upgradeHeader = request.headers.get("Upgrade");
-    if (upgradeHeader === "websocket") {
-      const pair = new WebSocketPair();
-      const [client, server] = Object.values(pair);
-
-      const clientIp =
-        request.headers.get("CF-Connecting-IP") ||
-        request.headers.get("x-forwarded-for") ||
-        "unknown";
-
-      await this.handleWebSocket(server, clientIp);
-
-      return new Response(null, {
-        status: 101,
-        webSocket: client,
-        headers: { "Access-Control-Allow-Origin": "*" },
-      });
     }
 
     return new Response("Not Found", { status: 404 });
