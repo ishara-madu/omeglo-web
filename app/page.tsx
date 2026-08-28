@@ -509,23 +509,31 @@ export default function Home() {
 
   // Bind local stream to local video element
   useEffect(() => {
-    if (localVideoRef.current && localStream) {
-      localVideoRef.current.srcObject = localStream;
-      localVideoRef.current.play().catch((err) => {
-        console.warn("Local video play warning:", err);
-      });
+    if (localVideoRef.current) {
+      if (localStream && chatMode === "video") {
+        localVideoRef.current.srcObject = localStream;
+        localVideoRef.current.play().catch((err) => {
+          console.warn("Local video play warning:", err);
+        });
+      } else {
+        localVideoRef.current.srcObject = null;
+      }
     }
-  }, [localStream]);
+  }, [localStream, chatMode]);
 
   // Bind remote stream to remote video element
   useEffect(() => {
-    if (remoteVideoRef.current && remoteStream) {
-      remoteVideoRef.current.srcObject = remoteStream;
-      remoteVideoRef.current.play().catch((err) => {
-        console.warn("Remote video play warning:", err);
-      });
+    if (remoteVideoRef.current) {
+      if (remoteStream && chatMode === "video") {
+        remoteVideoRef.current.srcObject = remoteStream;
+        remoteVideoRef.current.play().catch((err) => {
+          console.warn("Remote video play warning:", err);
+        });
+      } else {
+        remoteVideoRef.current.srcObject = null;
+      }
     }
-  }, [remoteStream]);
+  }, [remoteStream, chatMode]);
 
   // Setup PeerJS P2P DataChannel Connection for direct peer-to-peer live text chat & typing indicators
   const setupDataConnection = useCallback((conn: DataConnection) => {
@@ -583,8 +591,107 @@ export default function Home() {
     });
   }, []);
 
-  // Request & Initialize Local Real Camera and Microphone (MANDATORY IN VIDEO MODE)
+  const activeStreamsRef = useRef<Set<MediaStream>>(new Set());
+
+  // Completely stop and release local Camera and Microphone hardware
+  const stopLocalStream = useCallback(() => {
+    // 1. Stop all registered MediaStreams in activeStreamsRef
+    activeStreamsRef.current.forEach((stream) => {
+      try {
+        stream.getTracks().forEach((track) => {
+          try {
+            track.stop();
+            track.enabled = false;
+          } catch {}
+        });
+      } catch {}
+    });
+    activeStreamsRef.current.clear();
+
+    // 2. Stop all tracks in localStreamRef
+    if (localStreamRef.current) {
+      try {
+        localStreamRef.current.getTracks().forEach((track) => {
+          try {
+            track.stop();
+            track.enabled = false;
+          } catch {}
+        });
+      } catch {}
+      localStreamRef.current = null;
+    }
+
+    // 3. Stop all tracks in localVideoRef srcObject & pause element
+    if (localVideoRef.current) {
+      try {
+        if (localVideoRef.current.srcObject) {
+          const stream = localVideoRef.current.srcObject as MediaStream;
+          if (stream && stream.getTracks) {
+            stream.getTracks().forEach((track) => {
+              try {
+                track.stop();
+                track.enabled = false;
+              } catch {}
+            });
+          }
+        }
+        localVideoRef.current.pause();
+        localVideoRef.current.srcObject = null;
+        localVideoRef.current.src = "";
+      } catch {}
+    }
+
+    // 4. Stop all tracks in remoteVideoRef srcObject & pause element
+    if (remoteVideoRef.current) {
+      try {
+        if (remoteVideoRef.current.srcObject) {
+          const rStream = remoteVideoRef.current.srcObject as MediaStream;
+          if (rStream && rStream.getTracks) {
+            rStream.getTracks().forEach((track) => {
+              try {
+                track.stop();
+                track.enabled = false;
+              } catch {}
+            });
+          }
+        }
+        remoteVideoRef.current.pause();
+        remoteVideoRef.current.srcObject = null;
+        remoteVideoRef.current.src = "";
+      } catch {}
+    }
+
+    // 5. Stop all tracks on active WebRTC RTCRtpSenders & close media calls
+    if (activeCallRef.current) {
+      try {
+        const pc: RTCPeerConnection = (activeCallRef.current as any).peerConnection;
+        if (pc && pc.getSenders) {
+          pc.getSenders().forEach((sender) => {
+            if (sender.track) {
+              try {
+                sender.track.stop();
+                sender.track.enabled = false;
+              } catch {}
+            }
+          });
+        }
+        activeCallRef.current.close();
+      } catch {}
+      activeCallRef.current = null;
+    }
+
+    setLocalStream(null);
+    setRemoteStream(null);
+  }, []);
+
+  // Request & Initialize Local Real Camera and Microphone (MANDATORY IN VIDEO MODE ONLY)
   const initLocalStream = useCallback(async (): Promise<MediaStream | null> => {
+    // 0. Strict Guard: If in Text mode, NEVER touch or access Camera/Mic
+    if (chatModeRef.current === "text") {
+      stopLocalStream();
+      return null;
+    }
+
     if (localStreamRef.current && localStreamRef.current.active) {
       return localStreamRef.current;
     }
@@ -608,6 +715,20 @@ export default function Home() {
           autoGainControl: true,
         },
       });
+
+      // Strict race condition check: if user switched to text mode while waiting for getUserMedia
+      if ((chatModeRef.current as string) === "text") {
+        stream.getTracks().forEach((track) => {
+          try {
+            track.stop();
+            track.enabled = false;
+          } catch {}
+        });
+        return null;
+      }
+
+      activeStreamsRef.current.add(stream);
+
       // Strictly apply current mute preference to newly acquired audio tracks
       stream.getAudioTracks().forEach((track) => {
         track.enabled = !isMicMutedRef.current;
@@ -629,6 +750,19 @@ export default function Home() {
             noiseSuppression: true,
           },
         });
+
+        if ((chatModeRef.current as string) === "text") {
+          stream.getTracks().forEach((track) => {
+            try {
+              track.stop();
+              track.enabled = false;
+            } catch {}
+          });
+          return null;
+        }
+
+        activeStreamsRef.current.add(stream);
+
         // Strictly apply current mute preference
         stream.getAudioTracks().forEach((track) => {
           track.enabled = !isMicMutedRef.current;
@@ -647,6 +781,19 @@ export default function Home() {
             video: { width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 30 } },
             audio: false,
           });
+
+          if ((chatModeRef.current as string) === "text") {
+            stream.getTracks().forEach((track) => {
+              try {
+                track.stop();
+                track.enabled = false;
+              } catch {}
+            });
+            return null;
+          }
+
+          activeStreamsRef.current.add(stream);
+
           localStreamRef.current = stream;
           setLocalStream(stream);
           setHasCameraPermission(true);
@@ -660,7 +807,7 @@ export default function Home() {
         }
       }
     }
-  }, []);
+  }, [stopLocalStream]);
 
   // Clean up current active call and remote streams
   const cleanupCall = useCallback(() => {
@@ -701,6 +848,10 @@ export default function Home() {
       const savedMode = localStorage.getItem("omeglo_chat_mode") as ChatMode;
       if (savedMode === "video" || savedMode === "text") {
         setChatMode(savedMode);
+        chatModeRef.current = savedMode;
+        if (savedMode === "text") {
+          stopLocalStream();
+        }
       }
 
       const savedSoundMuted = localStorage.getItem("omeglo_sound_muted");
@@ -801,7 +952,7 @@ export default function Home() {
       addSystemMessage(`Connected with a stranger in ${mode === "text" ? "Text" : "Video"} Chat! Say hi.`);
 
       // In Video Mode: Establish WebRTC Video Stream
-      if (mode !== "text") {
+      if (mode !== "text" && chatModeRef.current === "video") {
         const stream = localStreamRef.current || (await initLocalStream());
 
         if (initiator && peerRef.current && partnerPeerId) {
@@ -851,12 +1002,14 @@ export default function Home() {
     };
   }, [addSystemMessage, cleanupCall, initLocalStream, setupDataConnection]);
 
-  // Request Camera automatically in Video mode after onboarding
+  // Manage Camera hardware lifecycle strictly based on chatMode
   useEffect(() => {
-    if (!showGenderModal && chatMode === "video") {
+    if (chatMode === "text") {
+      stopLocalStream();
+    } else if (chatMode === "video" && !showGenderModal) {
       initLocalStream();
     }
-  }, [showGenderModal, chatMode, initLocalStream]);
+  }, [showGenderModal, chatMode, initLocalStream, stopLocalStream]);
 
   // Save selected gender & trigger camera access
   const handleSaveGender = (gender: "male" | "female") => {
@@ -884,6 +1037,7 @@ export default function Home() {
       handleStop();
     }
     setChatMode(mode);
+    chatModeRef.current = mode;
     try {
       localStorage.setItem("omeglo_chat_mode", mode);
     } catch {}
@@ -891,12 +1045,9 @@ export default function Home() {
     if (mode === "video") {
       initLocalStream();
     } else if (mode === "text") {
-      // Completely release camera and microphone tracks in Text mode
-      if (localStreamRef.current) {
-        localStreamRef.current.getTracks().forEach((track) => track.stop());
-        localStreamRef.current = null;
-        setLocalStream(null);
-      }
+      // Completely release camera and microphone hardware tracks in Text mode
+      stopLocalStream();
+      cleanupCall();
     }
   };
 
@@ -1410,13 +1561,13 @@ export default function Home() {
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
           <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-sm w-full border border-zinc-200 shadow-2xl flex flex-col items-center text-center">
             {/* Brand Logo Icon */}
-            <div className="w-13 h-13 rounded-2xl bg-zinc-50 border border-zinc-100 p-2 flex items-center justify-center mb-3.5 shadow-xs">
+            <div className="w-14 h-14 flex items-center justify-center mb-3.5">
               <Image
                 src="/logo.webp"
                 alt="Omeglo Icon"
-                width={40}
-                height={40}
-                className="w-full h-full object-contain rounded-xl"
+                width={56}
+                height={56}
+                className="w-full h-full object-contain"
                 priority
               />
             </div>
@@ -1445,12 +1596,12 @@ export default function Home() {
                     <Check className="w-3 h-3 stroke-[3]" />
                   </div>
                 )}
-                <div className="w-16 h-16 rounded-2xl bg-white border border-zinc-100 p-2 flex items-center justify-center shadow-xs group-hover:scale-105 transition-transform">
+                <div className="w-18 h-18 flex items-center justify-center group-hover:scale-105 transition-transform">
                   <Image
                     src="/male.svg"
                     alt="Male Avatar"
-                    width={56}
-                    height={56}
+                    width={68}
+                    height={68}
                     className="w-full h-full object-contain"
                     priority
                   />
@@ -1475,12 +1626,12 @@ export default function Home() {
                     <Check className="w-3 h-3 stroke-[3]" />
                   </div>
                 )}
-                <div className="w-16 h-16 rounded-2xl bg-white border border-zinc-100 p-2 flex items-center justify-center shadow-xs group-hover:scale-105 transition-transform">
+                <div className="w-18 h-18 flex items-center justify-center group-hover:scale-105 transition-transform">
                   <Image
                     src="/female.svg"
                     alt="Female Avatar"
-                    width={56}
-                    height={56}
+                    width={68}
+                    height={68}
                     className="w-full h-full object-contain"
                     priority
                   />
@@ -1509,12 +1660,12 @@ export default function Home() {
           {/* Brand Logo & Multicolor Wordmark */}
           <div className="flex items-center gap-2.5">
             {/* Minimalist Logo Icon */}
-            <div className="w-8.5 h-8.5 rounded-lg overflow-hidden flex items-center justify-center transition-transform hover:scale-105">
+            <div className="w-9 h-9 flex items-center justify-center transition-transform hover:scale-105">
               <Image
                 src="/logo.webp"
                 alt="Omeglo Logo Mark"
-                width={34}
-                height={34}
+                width={36}
+                height={36}
                 className="w-full h-full object-contain"
                 priority
               />
@@ -1702,11 +1853,9 @@ export default function Home() {
                 <div className="absolute left-0 right-0 h-24 bg-linear-to-b from-transparent via-white/10 to-transparent animate-scan-beam pointer-events-none" />
 
                 <div className="relative z-10 flex flex-col items-center gap-3.5 p-5 text-center bg-zinc-950/80 backdrop-blur-md border border-white/10 rounded-2xl shadow-xl max-w-xs animate-static-flicker">
-                  <div className="relative flex items-center justify-center">
-                    <div className="w-12 h-12 rounded-full bg-zinc-900 border border-zinc-700 flex items-center justify-center text-zinc-200">
-                      <Radio className="w-5 h-5 animate-spin" style={{ animationDuration: "3s" }} />
-                    </div>
-                    <div className="absolute inset-0 rounded-full border border-white/30 animate-ping opacity-40" />
+                  <div className="relative flex items-center justify-center p-2">
+                    <Radio className="w-10 h-10 text-zinc-200 animate-spin" style={{ animationDuration: "3s" }} />
+                    <div className="absolute inset-0 rounded-full border border-white/20 animate-ping opacity-30" />
                   </div>
                   <div className="space-y-0.5">
                     <p className="text-zinc-100 font-medium text-sm">
@@ -1728,13 +1877,13 @@ export default function Home() {
             {chatMode === "text" && status === "connected" && (
               <div className="flex flex-col items-center gap-4 p-6 text-center select-none z-10 animate-in fade-in">
                 <div className="relative">
-                  <div className="w-24 h-24 rounded-3xl bg-zinc-900 border border-zinc-700 p-4 flex items-center justify-center shadow-xl">
+                  <div className="w-24 h-24 flex items-center justify-center">
                     <Image
                       src={strangerGender === "female" ? "/female.svg" : "/male.svg"}
                       alt="Stranger Avatar"
-                      width={64}
-                      height={64}
-                      className="w-full h-full object-contain"
+                      width={96}
+                      height={96}
+                      className="w-full h-full object-contain drop-shadow-md"
                     />
                   </div>
                   <span className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-emerald-500 border-2 border-zinc-950 flex items-center justify-center shadow-xs text-white">
@@ -1755,8 +1904,8 @@ export default function Home() {
             {/* IDLE STATE */}
             {status === "idle" && (
               <div className="flex flex-col items-center gap-3.5 p-6 text-center select-none pointer-events-none z-0">
-                <div className="w-16 h-16 rounded-2xl bg-zinc-900/90 border border-zinc-800 flex items-center justify-center text-zinc-500 shadow-inner">
-                  {chatMode === "text" ? <MessageSquare className="w-8 h-8 stroke-[1.5]" /> : <User className="w-8 h-8 stroke-[1.5]" />}
+                <div className="flex items-center justify-center text-zinc-500 mb-1">
+                  {chatMode === "text" ? <MessageSquare className="w-12 h-12 stroke-[1.5]" /> : <User className="w-12 h-12 stroke-[1.5]" />}
                 </div>
                 <div className="space-y-1">
                   <p className="text-zinc-200 font-semibold text-sm">
@@ -1774,8 +1923,8 @@ export default function Home() {
             {/* DISCONNECTED STATE WITH AUTO-NEXT COUNTDOWN */}
             {status === "disconnected" && (
               <div className="flex flex-col items-center gap-3.5 p-6 text-center select-none z-10 max-w-xs animate-in fade-in">
-                <div className="w-14 h-14 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-400 shadow-inner">
-                  <Info className="w-6 h-6 stroke-[1.5]" />
+                <div className="flex items-center justify-center text-zinc-400 mb-1">
+                  <Info className="w-10 h-10 stroke-[1.5]" />
                 </div>
                 <div className="space-y-1">
                   <p className="text-zinc-200 font-semibold text-sm">Stranger Disconnected</p>
@@ -2075,9 +2224,7 @@ export default function Home() {
           {/* Chat Panel Header */}
           <div className="px-4 py-3 border-b border-zinc-100 flex items-center justify-between bg-white">
             <div className="flex items-center gap-2">
-              <div className="p-1 rounded-lg bg-zinc-100 text-zinc-600">
-                <MessageSquare className="w-3.5 h-3.5" />
-              </div>
+              <MessageSquare className="w-4.5 h-4.5 text-zinc-700 shrink-0" />
               <div>
                 <h2 className="text-xs font-semibold text-zinc-950 leading-none">
                   {chatMode === "text" ? "P2P Text Chat" : "Live Video Chat"}
