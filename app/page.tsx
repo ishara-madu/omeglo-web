@@ -35,7 +35,8 @@ import {
   SignalLow,
   WifiOff,
   Activity,
-  Sparkles,
+  Flag,
+  ShieldAlert,
 } from "lucide-react";
 
 type ChatMessage = {
@@ -92,7 +93,7 @@ function playAudioSFX(type: "match" | "message" | "leave", isMuted: boolean) {
       osc.start(now);
       osc.stop(now + 0.28);
     }
-  } catch {}
+  } catch { }
 }
 
 // Low-Bandwidth & Weak-Signal WebRTC Network Optimizations (Smooth 30fps, No-Freeze Adaptive Bitrate)
@@ -120,8 +121,8 @@ function applyLowLatencyNetworkOptimizations(call: MediaConnection | null) {
             params.encodings[0].maxFramerate = 30;
             params.encodings[0].scaleResolutionDownBy = 1.0;
 
-            sender.setParameters(params).catch(() => {});
-          } catch {}
+            sender.setParameters(params).catch(() => { });
+          } catch { }
         } else if (sender.track.kind === "audio") {
           try {
             const params = sender.getParameters();
@@ -130,11 +131,11 @@ function applyLowLatencyNetworkOptimizations(call: MediaConnection | null) {
             }
             // Opus Voice HD: 32kbps is crystal clear and uses minimal bandwidth
             params.encodings[0].maxBitrate = 32000;
-            sender.setParameters(params).catch(() => {});
-          } catch {}
+            sender.setParameters(params).catch(() => { });
+          } catch { }
         }
       });
-    } catch {}
+    } catch { }
   };
 
   // Run optimization after slight delay to ensure SDP negotiation completes
@@ -253,9 +254,11 @@ export default function Home() {
   const [weakSignalWarning, setWeakSignalWarning] = useState<string | null>(null);
   const [liveCallQuality, setLiveCallQuality] = useState<"good" | "fair" | "poor">("good");
 
-  // Media Streams & Permission State
+  // Media Streams, Previews & Permission State
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
+  const [remoteMicroPreview, setRemoteMicroPreview] = useState<string | null>(null);
+  const [isRemoteVideoPlaying, setIsRemoteVideoPlaying] = useState(false);
   const [hasCameraPermission, setHasCameraPermission] = useState<boolean | null>(null);
   const [showPermissionModal, setShowPermissionModal] = useState(false);
   const [autoNextCountdown, setAutoNextCountdown] = useState<number | null>(null);
@@ -273,6 +276,13 @@ export default function Home() {
   // Draggable PiP State
   const [pipPos, setPipPos] = useState<{ x: number; y: number } | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+
+  // Report Modal & Notification State
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [reportReason, setReportReason] = useState<string>("nudity");
+  const [reportDetails, setReportDetails] = useState<string>("");
+  const [isSubmittingReport, setIsSubmittingReport] = useState(false);
+  const [reportToast, setReportToast] = useState<{ show: boolean; message: string } | null>(null);
 
   // Video & WebRTC Refs
   const localVideoRef = useRef<HTMLVideoElement>(null);
@@ -501,7 +511,7 @@ export default function Home() {
         } else {
           setLiveCallQuality("good");
         }
-      } catch {}
+      } catch { }
     }, 3000);
 
     return () => clearInterval(interval);
@@ -535,17 +545,51 @@ export default function Home() {
     }
   }, [remoteStream, chatMode]);
 
+  // Ultra-Lightweight P2P Micro-Snapshot (16x12 px ~ 200 Bytes) to show instant ambient colors before video frames arrive
+  const captureMicroThumbnail = useCallback((): string | null => {
+    if (!localVideoRef.current || !localStreamRef.current) return null;
+    try {
+      const video = localVideoRef.current;
+      if (!video.videoWidth || !video.videoHeight) return null;
+      const canvas = document.createElement("canvas");
+      canvas.width = 16;
+      canvas.height = 12;
+      const ctx = canvas.getContext("2d", { alpha: false });
+      if (!ctx) return null;
+      ctx.drawImage(video, 0, 0, 16, 12);
+      return canvas.toDataURL("image/webp", 0.1) || canvas.toDataURL("image/jpeg", 0.15);
+    } catch {
+      return null;
+    }
+  }, []);
+
+  const sendMicroThumbnail = useCallback((conn: DataConnection) => {
+    if (chatModeRef.current !== "video" || !conn.open) return;
+    const tryCapture = (attempt = 0) => {
+      const thumb = captureMicroThumbnail();
+      if (thumb && conn.open) {
+        try {
+          conn.send(JSON.stringify({ type: "micro-preview", preview: thumb }));
+        } catch { }
+      } else if (attempt < 8 && conn.open) {
+        setTimeout(() => tryCapture(attempt + 1), 100);
+      }
+    };
+    tryCapture();
+  }, [captureMicroThumbnail]);
+
   // Setup PeerJS P2P DataChannel Connection for direct peer-to-peer live text chat & typing indicators
   const setupDataConnection = useCallback((conn: DataConnection) => {
     dataConnRef.current = conn;
 
     conn.on("open", () => {
       console.log("🟢 PeerJS P2P DataChannel connected and ready for live chat.");
+      sendMicroThumbnail(conn);
     });
 
     conn.on("data", (data: unknown) => {
       if (typeof data === "string") {
-        // 1. Check if packet is typing status
+        // 1. Check if packet is JSON control message
         try {
           const parsed = JSON.parse(data);
           if (parsed && parsed.type === "typing") {
@@ -558,7 +602,11 @@ export default function Home() {
             }
             return;
           }
-        } catch {}
+          if (parsed && parsed.type === "micro-preview" && parsed.preview) {
+            setRemoteMicroPreview(parsed.preview);
+            return;
+          }
+        } catch { }
 
         // 2. Regular Text Message
         setIsStrangerTyping(false);
@@ -589,7 +637,7 @@ export default function Home() {
     conn.on("error", (err) => {
       console.warn("PeerJS DataConnection error:", err);
     });
-  }, []);
+  }, [sendMicroThumbnail]);
 
   const activeStreamsRef = useRef<Set<MediaStream>>(new Set());
 
@@ -602,9 +650,9 @@ export default function Home() {
           try {
             track.stop();
             track.enabled = false;
-          } catch {}
+          } catch { }
         });
-      } catch {}
+      } catch { }
     });
     activeStreamsRef.current.clear();
 
@@ -615,9 +663,9 @@ export default function Home() {
           try {
             track.stop();
             track.enabled = false;
-          } catch {}
+          } catch { }
         });
-      } catch {}
+      } catch { }
       localStreamRef.current = null;
     }
 
@@ -631,14 +679,14 @@ export default function Home() {
               try {
                 track.stop();
                 track.enabled = false;
-              } catch {}
+              } catch { }
             });
           }
         }
         localVideoRef.current.pause();
         localVideoRef.current.srcObject = null;
         localVideoRef.current.src = "";
-      } catch {}
+      } catch { }
     }
 
     // 4. Stop all tracks in remoteVideoRef srcObject & pause element
@@ -651,14 +699,14 @@ export default function Home() {
               try {
                 track.stop();
                 track.enabled = false;
-              } catch {}
+              } catch { }
             });
           }
         }
         remoteVideoRef.current.pause();
         remoteVideoRef.current.srcObject = null;
         remoteVideoRef.current.src = "";
-      } catch {}
+      } catch { }
     }
 
     // 5. Stop all tracks on active WebRTC RTCRtpSenders & close media calls
@@ -671,12 +719,12 @@ export default function Home() {
               try {
                 sender.track.stop();
                 sender.track.enabled = false;
-              } catch {}
+              } catch { }
             }
           });
         }
         activeCallRef.current.close();
-      } catch {}
+      } catch { }
       activeCallRef.current = null;
     }
 
@@ -722,7 +770,7 @@ export default function Home() {
           try {
             track.stop();
             track.enabled = false;
-          } catch {}
+          } catch { }
         });
         return null;
       }
@@ -756,7 +804,7 @@ export default function Home() {
             try {
               track.stop();
               track.enabled = false;
-            } catch {}
+            } catch { }
           });
           return null;
         }
@@ -787,7 +835,7 @@ export default function Home() {
               try {
                 track.stop();
                 track.enabled = false;
-              } catch {}
+              } catch { }
             });
             return null;
           }
@@ -822,6 +870,8 @@ export default function Home() {
     setIsStrangerTyping(false);
     setLiveCallQuality("good");
     setRemoteStream(null);
+    setRemoteMicroPreview(null);
+    setIsRemoteVideoPlaying(false);
     if (remoteVideoRef.current) {
       remoteVideoRef.current.srcObject = null;
     }
@@ -948,8 +998,20 @@ export default function Home() {
       cleanupCall();
       setStatus("connected");
       setStrangerGender(partnerGender);
+      setRemoteMicroPreview(null);
+      setIsRemoteVideoPlaying(false);
+      setInputMessage("");
+      setIsStrangerTyping(false);
       playAudioSFX("match", isSoundMutedRef.current);
-      addSystemMessage(`Connected with a stranger in ${mode === "text" ? "Text" : "Video"} Chat! Say hi.`);
+
+      // Clear previous chats on new connection in both Video & Text modes
+      const connectMsg: ChatMessage = {
+        id: "sys-" + Date.now() + "-" + Math.random().toString(36).slice(2, 6),
+        sender: "system",
+        text: `Connected with a stranger in ${mode === "text" ? "Text" : "Video"} Chat! Say hi.`,
+        timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      };
+      setMessages([connectMsg]);
 
       // In Video Mode: Establish WebRTC Video Stream
       if (mode !== "text" && chatModeRef.current === "video") {
@@ -1015,7 +1077,7 @@ export default function Home() {
   const handleSaveGender = (gender: "male" | "female") => {
     try {
       localStorage.setItem("omeglo_user_gender", gender);
-    } catch {}
+    } catch { }
     setUserGender(gender);
     setShowGenderModal(false);
     if (chatMode === "video") {
@@ -1028,7 +1090,7 @@ export default function Home() {
     setMatchPreference(pref);
     try {
       localStorage.setItem("omeglo_match_pref", pref);
-    } catch {}
+    } catch { }
   };
 
   // Switch Chat Mode (Video Chat vs Text Only)
@@ -1040,7 +1102,7 @@ export default function Home() {
     chatModeRef.current = mode;
     try {
       localStorage.setItem("omeglo_chat_mode", mode);
-    } catch {}
+    } catch { }
 
     if (mode === "video") {
       initLocalStream();
@@ -1208,6 +1270,45 @@ export default function Home() {
     }
   }, [addSystemMessage, assessNetworkQuality, chatMode, cleanupCall, initLocalStream, matchPreference, userGender]);
 
+  // Open Report Modal
+  const handleOpenReportModal = useCallback(() => {
+    if (status !== "connected") return;
+    setReportReason("nudity");
+    setReportDetails("");
+    setShowReportModal(true);
+  }, [status]);
+
+  // Handle Report Submission (flags user, emits socket event, and skips)
+  const handleSubmitReport = useCallback(() => {
+    setIsSubmittingReport(true);
+
+    // 1. Emit report event to backend
+    socketRef.current?.emit("report-partner", {
+      reason: reportReason,
+      details: reportDetails.trim(),
+      timestamp: new Date().toISOString(),
+    });
+
+    setShowReportModal(false);
+    setIsSubmittingReport(false);
+
+    // 2. Show floating confirmation toast
+    setReportToast({
+      show: true,
+      message: "Stranger has been reported and disconnected. Finding next match...",
+    });
+
+    setTimeout(() => {
+      setReportToast(null);
+    }, 4000);
+
+    // 3. Add system message in chat
+    addSystemMessage("You reported this stranger. Looking for a new match...");
+
+    // 4. Automatically skip to next stranger
+    handleNext();
+  }, [addSystemMessage, handleNext, reportDetails, reportReason]);
+
   // Auto-Next Countdown Effect on Disconnect
   useEffect(() => {
     if (status !== "disconnected" || autoNextCountdown === null) return;
@@ -1246,7 +1347,7 @@ export default function Home() {
       isSoundMutedRef.current = nextMuted;
       try {
         localStorage.setItem("omeglo_sound_muted", String(nextMuted));
-      } catch {}
+      } catch { }
       return nextMuted;
     });
   };
@@ -1318,6 +1419,12 @@ export default function Home() {
   // Keyboard Shortcuts (Esc to Stop/Next, Enter/T to quickly focus chat)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (showReportModal) {
+        if (e.key === "Escape") {
+          setShowReportModal(false);
+        }
+        return;
+      }
       if (showGenderModal || showPermissionModal || showWeakSignalModal) return;
       if (document.activeElement === inputRef.current) {
         if (e.key === "Escape") {
@@ -1344,7 +1451,7 @@ export default function Home() {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [status, handleNext, handleStart, showGenderModal, showPermissionModal, showWeakSignalModal]);
+  }, [status, handleNext, handleStart, showGenderModal, showPermissionModal, showWeakSignalModal, showReportModal]);
 
   // Handle Input Change with Real-Time Typing Indicator Transmission
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1355,14 +1462,14 @@ export default function Home() {
     if (dataConnRef.current && dataConnRef.current.open && status === "connected") {
       try {
         dataConnRef.current.send(JSON.stringify({ type: "typing", isTyping: val.length > 0 }));
-      } catch {}
+      } catch { }
 
       if (myTypingDebounceRef.current) clearTimeout(myTypingDebounceRef.current);
       myTypingDebounceRef.current = setTimeout(() => {
         if (dataConnRef.current && dataConnRef.current.open) {
           try {
             dataConnRef.current.send(JSON.stringify({ type: "typing", isTyping: false }));
-          } catch {}
+          } catch { }
         }
       }, 2000);
     }
@@ -1380,7 +1487,7 @@ export default function Home() {
       try {
         dataConnRef.current.send(JSON.stringify({ type: "typing", isTyping: false }));
         dataConnRef.current.send(msgText);
-      } catch {}
+      } catch { }
     }
 
     const newMsg: ChatMessage = {
@@ -1421,8 +1528,8 @@ export default function Home() {
             </button>
 
             {/* Red Weak Signal Icon */}
-            <div className="w-14 h-14 rounded-2xl bg-red-50 border border-red-200 p-3 flex items-center justify-center mb-3.5 text-red-600 shadow-xs">
-              <WifiOff className="w-7 h-7" />
+            <div className="flex items-center justify-center mb-3 text-red-500">
+              <WifiOff className="w-11 h-11 stroke-[1.5]" />
             </div>
 
             <h2 className="text-lg font-bold tracking-tight text-zinc-950 mb-1">
@@ -1493,12 +1600,8 @@ export default function Home() {
               <X className="w-4 h-4" />
             </button>
 
-            {/* Warning Icon Badge */}
-            <div className="w-14 h-14 rounded-2xl bg-amber-50 border border-amber-200 p-3 flex items-center justify-center mb-3.5 text-amber-600 shadow-xs">
-              <Camera className="w-7 h-7" />
-            </div>
 
-            <h2 className="text-lg font-bold tracking-tight text-zinc-950 mb-1.5">
+            <h2 className="text-xl font-bold tracking-tight text-zinc-950 mb-1.5 mx-3">
               Camera & Microphone Access Required
             </h2>
             <p className="text-xs text-zinc-500 mb-5 leading-relaxed">
@@ -1585,11 +1688,10 @@ export default function Home() {
               <button
                 type="button"
                 onClick={() => setTempSelectedGender("male")}
-                className={`group relative p-4 rounded-2xl border flex flex-col items-center gap-3 transition-all duration-150 cursor-pointer ${
-                  tempSelectedGender === "male"
-                    ? "border-zinc-950 bg-zinc-50/80 ring-2 ring-zinc-950 shadow-xs"
-                    : "border-zinc-200 hover:border-zinc-300 hover:bg-zinc-50/50"
-                }`}
+                className={`group relative p-4 rounded-2xl border flex flex-col items-center gap-3 transition-all duration-150 cursor-pointer ${tempSelectedGender === "male"
+                  ? "border-zinc-950 bg-zinc-50/80 ring-2 ring-zinc-950 shadow-xs"
+                  : "border-zinc-200 hover:border-zinc-300 hover:bg-zinc-50/50"
+                  }`}
               >
                 {tempSelectedGender === "male" && (
                   <div className="absolute top-2.5 right-2.5 w-5 h-5 rounded-full bg-zinc-950 text-white flex items-center justify-center shadow-xs">
@@ -1615,11 +1717,10 @@ export default function Home() {
               <button
                 type="button"
                 onClick={() => setTempSelectedGender("female")}
-                className={`group relative p-4 rounded-2xl border flex flex-col items-center gap-3 transition-all duration-150 cursor-pointer ${
-                  tempSelectedGender === "female"
-                    ? "border-zinc-950 bg-zinc-50/80 ring-2 ring-zinc-950 shadow-xs"
-                    : "border-zinc-200 hover:border-zinc-300 hover:bg-zinc-50/50"
-                }`}
+                className={`group relative p-4 rounded-2xl border flex flex-col items-center gap-3 transition-all duration-150 cursor-pointer ${tempSelectedGender === "female"
+                  ? "border-zinc-950 bg-zinc-50/80 ring-2 ring-zinc-950 shadow-xs"
+                  : "border-zinc-200 hover:border-zinc-300 hover:bg-zinc-50/50"
+                  }`}
               >
                 {tempSelectedGender === "female" && (
                   <div className="absolute top-2.5 right-2.5 w-5 h-5 rounded-full bg-zinc-950 text-white flex items-center justify-center shadow-xs">
@@ -1651,6 +1752,125 @@ export default function Home() {
               <span>Continue to Omeglo</span>
             </button>
           </div>
+        </div>
+      )}
+
+      {/* REPORT STRANGER MODAL */}
+      {showReportModal && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl p-6 sm:p-7 max-w-md w-full border border-zinc-200 shadow-2xl flex flex-col relative text-left">
+            {/* Close Button */}
+            <button
+              type="button"
+              onClick={() => setShowReportModal(false)}
+              className="absolute top-4 right-4 p-1.5 rounded-full text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 transition-colors cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            {/* Modal Header */}
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-10 h-10 rounded-2xl bg-red-50 border border-red-100 flex items-center justify-center text-red-600 shrink-0 shadow-2xs">
+                <ShieldAlert className="w-5 h-5 stroke-[2.25]" />
+              </div>
+              <div>
+                <h2 className="text-base sm:text-lg font-bold text-zinc-950 leading-tight">
+                  Report Stranger
+                </h2>
+                <p className="text-[11px] text-zinc-500">
+                  Reports are 100% anonymous & protect our community.
+                </p>
+              </div>
+            </div>
+
+            {/* Subtitle / Explanation */}
+            <p className="text-xs text-zinc-600 mb-3.5 bg-zinc-50 p-2.5 rounded-xl border border-zinc-200/60 leading-relaxed">
+              Select the reason for reporting. Submitting will immediately disconnect you and flag this user in our system.
+            </p>
+
+            {/* Reason Selection Radio Cards */}
+            <div className="space-y-2 mb-3.5">
+              {[
+                { id: "nudity", label: "Nudity or Sexual Content", desc: "Explicit acts, nudity, or inappropriate NSFW behavior", icon: "🔞" },
+                { id: "harassment", label: "Harassment or Hate Speech", desc: "Bullying, abusive words, threats, or discrimination", icon: "🚫" },
+                { id: "underage", label: "Underage User", desc: "Stranger appears to be a minor", icon: "👶" },
+                { id: "spam", label: "Spam, Bot or Advertising", desc: "Recorded video, automated bots, or promotions", icon: "📢" },
+                { id: "other", label: "Other Violation", desc: "Other disruptive or rule-breaking behavior", icon: "⚠️" },
+              ].map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => setReportReason(item.id)}
+                  className={`w-full p-2.5 sm:p-3 rounded-xl border text-left flex items-center gap-3 transition-all cursor-pointer ${
+                    reportReason === item.id
+                      ? "border-red-500 bg-red-50/50 ring-1.5 ring-red-500/50 shadow-2xs"
+                      : "border-zinc-200 hover:border-zinc-300 hover:bg-zinc-50/60"
+                  }`}
+                >
+                  <span className="text-lg shrink-0">{item.icon}</span>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs font-semibold text-zinc-900 leading-snug">
+                      {item.label}
+                    </div>
+                    <div className="text-[10px] text-zinc-500 truncate">
+                      {item.desc}
+                    </div>
+                  </div>
+                  <div
+                    className={`w-4 h-4 rounded-full border flex items-center justify-center transition-colors shrink-0 ${
+                      reportReason === item.id
+                        ? "border-red-600 bg-red-600 text-white"
+                        : "border-zinc-300 bg-white"
+                    }`}
+                  >
+                    {reportReason === item.id && <Check className="w-2.5 h-2.5 stroke-[3]" />}
+                  </div>
+                </button>
+              ))}
+            </div>
+
+            {/* Optional Details Input */}
+            <div className="mb-4">
+              <label className="block text-[11px] font-medium text-zinc-600 mb-1">
+                Additional Details (Optional)
+              </label>
+              <input
+                type="text"
+                value={reportDetails}
+                onChange={(e) => setReportDetails(e.target.value)}
+                placeholder="Briefly describe what happened..."
+                className="w-full h-9 px-3 text-xs bg-zinc-50 border border-zinc-200 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-zinc-900 focus:bg-white text-zinc-900 placeholder:text-zinc-400"
+              />
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex items-center gap-2.5 w-full">
+              <button
+                type="button"
+                onClick={() => setShowReportModal(false)}
+                className="flex-1 h-10 rounded-xl bg-zinc-100 hover:bg-zinc-200 text-zinc-700 text-xs font-medium transition-colors cursor-pointer text-center"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isSubmittingReport}
+                onClick={handleSubmitReport}
+                className="flex-1 h-10 rounded-xl bg-red-600 hover:bg-red-700 active:scale-[0.98] text-white text-xs font-semibold transition-all shadow-xs cursor-pointer flex items-center justify-center gap-1.5 disabled:opacity-50"
+              >
+                <Flag className="w-3.5 h-3.5 fill-current" />
+                <span>Submit & Skip</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Floating Report Toast Notification */}
+      {reportToast && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-zinc-950/90 backdrop-blur-md text-white text-xs font-medium px-4 py-2.5 rounded-full border border-white/20 shadow-2xl flex items-center gap-2 animate-in fade-in slide-in-from-top-3">
+          <ShieldAlert className="w-4 h-4 text-red-400 shrink-0" />
+          <span>{reportToast.message}</span>
         </div>
       )}
 
@@ -1687,11 +1907,10 @@ export default function Home() {
             <button
               type="button"
               onClick={() => handleModeChange("video")}
-              className={`h-8 px-3 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all duration-150 cursor-pointer ${
-                chatMode === "video"
-                  ? "bg-white text-zinc-950 shadow-2xs font-semibold ring-1 ring-zinc-200/80"
-                  : "text-zinc-500 hover:text-zinc-900 hover:bg-white/50"
-              }`}
+              className={`h-8 px-3 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all duration-150 cursor-pointer ${chatMode === "video"
+                ? "bg-white text-zinc-950 shadow-2xs font-semibold ring-1 ring-zinc-200/80"
+                : "text-zinc-500 hover:text-zinc-900 hover:bg-white/50"
+                }`}
             >
               <Video className="w-3.5 h-3.5" />
               <span>Video Chat</span>
@@ -1699,11 +1918,10 @@ export default function Home() {
             <button
               type="button"
               onClick={() => handleModeChange("text")}
-              className={`h-8 px-3 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all duration-150 cursor-pointer ${
-                chatMode === "text"
-                  ? "bg-white text-zinc-950 shadow-2xs font-semibold ring-1 ring-zinc-200/80"
-                  : "text-zinc-500 hover:text-zinc-900 hover:bg-white/50"
-              }`}
+              className={`h-8 px-3 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all duration-150 cursor-pointer ${chatMode === "text"
+                ? "bg-white text-zinc-950 shadow-2xs font-semibold ring-1 ring-zinc-200/80"
+                : "text-zinc-500 hover:text-zinc-900 hover:bg-white/50"
+                }`}
             >
               <MessageSquare className="w-3.5 h-3.5" />
               <span>Text Only</span>
@@ -1715,20 +1933,18 @@ export default function Home() {
             {/* Real-time Network Signal Health Indicator */}
             {chatMode === "video" && (
               <div
-                title={`Network Signal: ${
-                  networkQuality === "good"
-                    ? "Strong (Smooth HD)"
-                    : networkQuality === "fair"
+                title={`Network Signal: ${networkQuality === "good"
+                  ? "Strong (Smooth HD)"
+                  : networkQuality === "fair"
                     ? "Fair (Low Bandwidth - optimized)"
                     : "Critical / Weak Signal"
-                }`}
-                className={`flex items-center gap-1.5 px-2 py-1 rounded-full border transition-colors ${
-                  networkQuality === "good"
-                    ? "bg-emerald-50/80 border-emerald-200/60 text-emerald-700"
-                    : networkQuality === "fair"
+                  }`}
+                className={`flex items-center gap-1.5 px-2 py-1 rounded-full border transition-colors ${networkQuality === "good"
+                  ? "bg-emerald-50/80 border-emerald-200/60 text-emerald-700"
+                  : networkQuality === "fair"
                     ? "bg-amber-50/80 border-amber-200/60 text-amber-700"
                     : "bg-red-50/80 border-red-200/60 text-red-700 animate-pulse"
-                }`}
+                  }`}
               >
                 {networkQuality === "good" ? (
                   <Signal className="w-3.5 h-3.5" />
@@ -1795,41 +2011,96 @@ export default function Home() {
             ref={containerRef}
             className="relative w-full aspect-4/3 sm:aspect-16/10 lg:aspect-auto flex-1 min-h-[380px] sm:min-h-[480px] lg:min-h-[540px] bg-zinc-950 rounded-2xl overflow-hidden border border-zinc-800/80 shadow-xs flex flex-col items-center justify-center text-zinc-400"
           >
-            {/* VIDEO MODE: Stranger Live WebRTC Video Element */}
+            {/* VIDEO MODE: Instant Micro-Preview & Stranger Live WebRTC Video Element */}
             {chatMode === "video" && (
-              <video
-                ref={remoteVideoRef}
-                autoPlay
-                playsInline
-                className={`absolute inset-0 w-full h-full object-cover z-0 transition-opacity duration-300 ${
-                  status === "connected" && remoteStream ? "opacity-100 block" : "opacity-0 hidden"
-                }`}
-              />
+              <>
+                {/* 1. Instant 0ms Fallback: Dummy Blurred Person Silhouette Placeholder (Before Micro-Snapshot arrives) */}
+                {!remoteMicroPreview && !isRemoteVideoPlaying && status === "connected" && (
+                  <div className="absolute inset-0 z-0 flex flex-col items-center justify-center overflow-hidden pointer-events-none">
+                    {/* Soft ambient background glow */}
+                    <div className="absolute inset-0 bg-gradient-to-b from-zinc-900 via-zinc-950 to-black animate-pulse" />
+                    
+                    {/* Dummy blurred person silhouette */}
+                    <div className="relative flex flex-col items-center justify-center filter blur-xl scale-125 opacity-30 animate-pulse">
+                      <div className="w-24 h-24 rounded-full bg-gradient-to-tr from-zinc-600 to-zinc-400 mb-2" />
+                      <div className="w-52 h-32 rounded-t-[60px] bg-gradient-to-t from-zinc-600 to-zinc-500" />
+                    </div>
+
+                    <div className="absolute bottom-6 left-1/2 -translate-x-1/2 bg-black/60 backdrop-blur-md px-3 py-1 rounded-full border border-white/10 text-zinc-300 text-[11px] font-medium flex items-center gap-1.5 shadow-sm">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
+                      <span>Connecting Video...</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* 2. Real Micro-Snapshot Preview (16x12 px ambient colors with heavy blur) */}
+                {remoteMicroPreview && !isRemoteVideoPlaying && status === "connected" && (
+                  <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none animate-in fade-in duration-300">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={remoteMicroPreview}
+                      alt="Stranger Preview"
+                      className="w-full h-full object-cover filter blur-3xl scale-125 transition-opacity duration-500"
+                    />
+                    <div className="absolute inset-0 bg-black/20" />
+                    <div className="absolute bottom-6 left-1/2 -translate-x-1/2 bg-black/60 backdrop-blur-md px-3 py-1 rounded-full border border-white/10 text-white text-[11px] font-medium flex items-center gap-1.5 shadow-sm">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
+                      <span>Loading HD Video...</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* 3. High-Definition WebRTC Video Feed (Smoothly cross-fades into view) */}
+                <video
+                  ref={remoteVideoRef}
+                  autoPlay
+                  playsInline
+                  onPlaying={() => setIsRemoteVideoPlaying(true)}
+                  onLoadedData={() => setIsRemoteVideoPlaying(true)}
+                  className={`absolute inset-0 w-full h-full object-cover z-0 transition-all duration-500 ${
+                    status === "connected" && remoteStream
+                      ? isRemoteVideoPlaying
+                        ? "opacity-100 filter-none"
+                        : "opacity-0 filter blur-xl"
+                      : "opacity-0 hidden"
+                  }`}
+                />
+              </>
             )}
 
             {/* Stranger Badge (Top Left) */}
             <div className="absolute top-4 left-4 z-10 flex items-center gap-2 bg-black/60 backdrop-blur-md px-3 py-1 rounded-full border border-white/10 text-white text-xs font-medium pointer-events-none">
               <span
-                className={`w-2 h-2 rounded-full transition-colors duration-300 ${
-                  status === "connected"
-                    ? "bg-emerald-500"
-                    : status === "searching"
+                className={`w-2 h-2 rounded-full transition-colors duration-300 ${status === "connected"
+                  ? "bg-emerald-500"
+                  : status === "searching"
                     ? "bg-amber-400 animate-pulse"
                     : "bg-zinc-600"
-                }`}
+                  }`}
               />
               <span className="text-[11px] font-medium tracking-tight">
                 {status === "connected" && strangerGender
-                  ? `Stranger (${strangerGender === "female" ? "♀ Female" : "♂ Male"})`
+                  ? `Stranger (${strangerGender === "female" ? "Female" : "Male"})`
                   : `Stranger (${chatMode === "text" ? "Text Mode" : "Video Mode"})`}
               </span>
             </div>
 
-            {/* Quality / Status Badge (Top Right) */}
+            {/* Quality & Report Badges (Top Right) */}
             {status === "connected" && (
-              <div className="absolute top-4 right-4 z-10 bg-black/60 backdrop-blur-md text-[11px] text-zinc-300 px-2.5 py-1 rounded-full border border-white/10 flex items-center gap-1.5 pointer-events-none">
-                <span className={`w-1.5 h-1.5 rounded-full ${liveCallQuality === "good" ? "bg-emerald-400" : "bg-amber-400 animate-pulse"}`} />
-                <span>{chatMode === "text" ? "P2P Text Active" : liveCallQuality === "good" ? "Live HD Video" : "Weak P2P Link"}</span>
+              <div className="absolute top-4 right-4 z-10 flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={handleOpenReportModal}
+                  title="Report this stranger"
+                  className="bg-black/60 hover:bg-red-950/80 hover:border-red-500/50 backdrop-blur-md text-[11px] text-zinc-300 hover:text-red-300 px-2.5 py-1 rounded-full border border-white/10 flex items-center gap-1.5 transition-colors cursor-pointer shadow-sm"
+                >
+                  <Flag className="w-3 h-3 text-red-400 fill-red-400/30" />
+                  <span>Report</span>
+                </button>
+                <div className="bg-black/60 backdrop-blur-md text-[11px] text-zinc-300 px-2.5 py-1 rounded-full border border-white/10 flex items-center gap-1.5 pointer-events-none">
+                  <span className={`w-1.5 h-1.5 rounded-full ${liveCallQuality === "good" ? "bg-emerald-400" : "bg-amber-400 animate-pulse"}`} />
+                  <span className="hidden sm:inline">{chatMode === "text" ? "P2P Text Active" : liveCallQuality === "good" ? "Live HD Video" : "Weak P2P Link"}</span>
+                </div>
               </div>
             )}
 
@@ -1865,8 +2136,8 @@ export default function Home() {
                       {matchPreference === "female"
                         ? "Looking for female match"
                         : matchPreference === "male"
-                        ? "Looking for male match"
-                        : "Looking for anyone"}
+                          ? "Looking for male match"
+                          : "Looking for anyone"}
                     </p>
                   </div>
                 </div>
@@ -1886,8 +2157,8 @@ export default function Home() {
                       className="w-full h-full object-contain drop-shadow-md"
                     />
                   </div>
-                  <span className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-emerald-500 border-2 border-zinc-950 flex items-center justify-center shadow-xs text-white">
-                    <Sparkles className="w-3 h-3" />
+                  <span className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-emerald-500 border-2 border-zinc-950 flex items-center justify-center shadow-xs text-white" title="Connected">
+                    <Check className="w-3 h-3 stroke-[3]" />
                   </span>
                 </div>
                 <div className="space-y-1">
@@ -1966,11 +2237,11 @@ export default function Home() {
                 style={
                   pipPos
                     ? {
-                        left: `${pipPos.x}px`,
-                        top: `${pipPos.y}px`,
-                        right: "auto",
-                        bottom: "auto",
-                      }
+                      left: `${pipPos.x}px`,
+                      top: `${pipPos.y}px`,
+                      right: "auto",
+                      bottom: "auto",
+                    }
                     : undefined
                 }
                 onMouseDown={(e) => {
@@ -1981,11 +2252,9 @@ export default function Home() {
                   if ((e.target as HTMLElement).closest("button")) return;
                   startDrag(e.touches[0].clientX, e.touches[0].clientY);
                 }}
-                className={`absolute ${
-                  !pipPos ? "bottom-4 right-4" : ""
-                } z-20 w-32 h-44 sm:w-38 sm:h-50 bg-zinc-950 border border-white/20 rounded-2xl shadow-2xl overflow-hidden backdrop-blur-md flex flex-col justify-between p-2.5 transition-shadow ${
-                  isDragging ? "cursor-grabbing ring-2 ring-zinc-400/40" : "cursor-grab hover:border-white/40"
-                }`}
+                className={`absolute ${!pipPos ? "bottom-4 right-4" : ""
+                  } z-20 w-32 h-44 sm:w-38 sm:h-50 bg-zinc-950 border border-white/20 rounded-2xl shadow-2xl overflow-hidden backdrop-blur-md flex flex-col justify-between p-2.5 transition-shadow ${isDragging ? "cursor-grabbing ring-2 ring-zinc-400/40" : "cursor-grab hover:border-white/40"
+                  }`}
               >
                 {/* Local Webcam Video Stream (Mirrored on user facing, z-0) */}
                 <video
@@ -1993,11 +2262,9 @@ export default function Home() {
                   autoPlay
                   playsInline
                   muted
-                  className={`absolute inset-0 w-full h-full object-cover z-0 ${
-                    facingMode === "user" ? "scale-x-[-1]" : ""
-                  } pointer-events-none transition-opacity duration-200 ${
-                    !localStream || hasCameraPermission === false ? "opacity-0" : "opacity-100"
-                  }`}
+                  className={`absolute inset-0 w-full h-full object-cover z-0 ${facingMode === "user" ? "scale-x-[-1]" : ""
+                    } pointer-events-none transition-opacity duration-200 ${!localStream || hasCameraPermission === false ? "opacity-0" : "opacity-100"
+                    }`}
                 />
 
                 {/* Drag Handle & Label (z-10 above video) */}
@@ -2029,10 +2296,10 @@ export default function Home() {
                     <button
                       type="button"
                       onClick={() => setShowPermissionModal(true)}
-                      className="pointer-events-auto p-2 rounded-xl bg-amber-500/20 border border-amber-400/40 text-amber-300 flex flex-col items-center gap-1 cursor-pointer hover:bg-amber-500/30 transition-colors"
+                      className="pointer-events-auto flex flex-col items-center gap-1.5 cursor-pointer text-amber-400 hover:text-amber-300 hover:scale-105 transition-all p-1"
                     >
-                      <AlertTriangle className="w-5 h-5 text-amber-400" />
-                      <span className="text-[9px] font-medium text-amber-200">Enable Cam</span>
+                      <AlertTriangle className="w-8 h-8 text-amber-400 stroke-[1.75]" />
+                      <span className="text-[10px] font-semibold text-amber-300">Enable Cam</span>
                     </button>
                   </div>
                 )}
@@ -2053,11 +2320,10 @@ export default function Home() {
                     }}
                     disabled={isFlippingCamera || !localStream}
                     title={`Flip Camera (Currently: ${facingMode === "user" ? "Front" : "Back"})`}
-                    className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
-                      isFlippingCamera
-                        ? "text-indigo-400 animate-spin"
-                        : "text-zinc-300 hover:bg-white/10 hover:text-white"
-                    }`}
+                    className={`p-1.5 rounded-lg transition-colors cursor-pointer ${isFlippingCamera
+                      ? "text-indigo-400 animate-spin"
+                      : "text-zinc-300 hover:bg-white/10 hover:text-white"
+                      }`}
                   >
                     <SwitchCamera className="w-3.5 h-3.5" />
                   </button>
@@ -2069,11 +2335,10 @@ export default function Home() {
                       toggleMic();
                     }}
                     title={isMicMuted ? "Unmute Mic" : "Mute Mic"}
-                    className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
-                      isMicMuted
-                        ? "bg-red-500/20 text-red-400"
-                        : "text-zinc-300 hover:bg-white/10 hover:text-white"
-                    }`}
+                    className={`p-1.5 rounded-lg transition-colors cursor-pointer ${isMicMuted
+                      ? "bg-red-500/20 text-red-400"
+                      : "text-zinc-300 hover:bg-white/10 hover:text-white"
+                      }`}
                   >
                     {isMicMuted ? <MicOff className="w-3.5 h-3.5" /> : <Mic className="w-3.5 h-3.5" />}
                   </button>
@@ -2106,15 +2371,27 @@ export default function Home() {
                     onClick={handleStop}
                     disabled={status === "disconnected"}
                     title="Stop / Disconnect"
-                    className={`h-11 px-4 sm:px-5 rounded-xl text-sm font-medium transition-all duration-150 flex items-center justify-center gap-2 cursor-pointer ${
-                      status === "disconnected"
-                        ? "bg-zinc-100 text-zinc-300 border border-zinc-200/50 cursor-not-allowed"
-                        : "bg-zinc-100 hover:bg-red-50 hover:text-red-600 text-zinc-700 border border-zinc-200/70 active:scale-[0.98]"
-                    }`}
+                    className={`h-11 px-4 sm:px-5 rounded-xl text-sm font-medium transition-all duration-150 flex items-center justify-center gap-2 cursor-pointer ${status === "disconnected"
+                      ? "bg-zinc-100 text-zinc-300 border border-zinc-200/50 cursor-not-allowed"
+                      : "bg-zinc-100 hover:bg-red-50 hover:text-red-600 text-zinc-700 border border-zinc-200/70 active:scale-[0.98]"
+                      }`}
                   >
                     <Square className="w-3.5 h-3.5" />
                     <span>Stop</span>
                   </button>
+
+                  {/* Report Button (Active when connected) */}
+                  {status === "connected" && (
+                    <button
+                      type="button"
+                      onClick={handleOpenReportModal}
+                      title="Report Stranger"
+                      className="h-11 px-3 sm:px-3.5 rounded-xl text-xs font-semibold bg-red-50/80 hover:bg-red-100/90 text-red-600 border border-red-200/70 active:scale-[0.98] transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs"
+                    >
+                      <Flag className="w-3.5 h-3.5 fill-red-500/20" />
+                      <span className="hidden sm:inline">Report</span>
+                    </button>
+                  )}
 
                   {/* Next / Skip Button */}
                   <button
@@ -2142,11 +2419,10 @@ export default function Home() {
                 type="button"
                 onClick={() => handleMatchPreferenceChange("any")}
                 title="Match with anyone"
-                className={`h-9 px-2.5 sm:px-3 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all duration-150 cursor-pointer ${
-                  matchPreference === "any"
-                    ? "bg-white text-zinc-950 shadow-2xs font-semibold ring-1 ring-zinc-200/80"
-                    : "text-zinc-500 hover:text-zinc-900 hover:bg-white/50"
-                }`}
+                className={`h-9 px-2.5 sm:px-3 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all duration-150 cursor-pointer ${matchPreference === "any"
+                  ? "bg-white text-zinc-950 shadow-2xs font-semibold ring-1 ring-zinc-200/80"
+                  : "text-zinc-500 hover:text-zinc-900 hover:bg-white/50"
+                  }`}
               >
                 <div className="w-4 h-4 rounded-full flex items-center justify-center">
                   <Image
@@ -2165,11 +2441,10 @@ export default function Home() {
                 type="button"
                 onClick={() => handleMatchPreferenceChange("female")}
                 title="Filter for female strangers"
-                className={`h-9 px-2.5 sm:px-3 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all duration-150 cursor-pointer ${
-                  matchPreference === "female"
-                    ? "bg-white text-zinc-950 shadow-2xs font-semibold ring-1 ring-zinc-200/80"
-                    : "text-zinc-500 hover:text-zinc-900 hover:bg-white/50"
-                }`}
+                className={`h-9 px-2.5 sm:px-3 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all duration-150 cursor-pointer ${matchPreference === "female"
+                  ? "bg-white text-zinc-950 shadow-2xs font-semibold ring-1 ring-zinc-200/80"
+                  : "text-zinc-500 hover:text-zinc-900 hover:bg-white/50"
+                  }`}
               >
                 <div className="w-4 h-4 rounded-full flex items-center justify-center">
                   <Image
@@ -2188,11 +2463,10 @@ export default function Home() {
                 type="button"
                 onClick={() => handleMatchPreferenceChange("male")}
                 title="Filter for male strangers"
-                className={`h-9 px-2.5 sm:px-3 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all duration-150 cursor-pointer ${
-                  matchPreference === "male"
-                    ? "bg-white text-zinc-950 shadow-2xs font-semibold ring-1 ring-zinc-200/80"
-                    : "text-zinc-500 hover:text-zinc-900 hover:bg-white/50"
-                }`}
+                className={`h-9 px-2.5 sm:px-3 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all duration-150 cursor-pointer ${matchPreference === "male"
+                  ? "bg-white text-zinc-950 shadow-2xs font-semibold ring-1 ring-zinc-200/80"
+                  : "text-zinc-500 hover:text-zinc-900 hover:bg-white/50"
+                  }`}
               >
                 <div className="w-4 h-4 rounded-full flex items-center justify-center">
                   <Image
@@ -2233,23 +2507,32 @@ export default function Home() {
                   {status === "connected"
                     ? "Direct Encrypted Connection"
                     : status === "searching"
-                    ? "Finding stranger..."
-                    : "Idle"}
+                      ? "Finding stranger..."
+                      : "Idle"}
                 </span>
               </div>
             </div>
 
-            {/* Header Controls: Sound Toggle & Clear Chat */}
+            {/* Header Controls: Sound Toggle, Report & Clear Chat */}
             <div className="flex items-center gap-1">
+              {status === "connected" && (
+                <button
+                  type="button"
+                  onClick={handleOpenReportModal}
+                  title="Report stranger for inappropriate behavior"
+                  className="p-1.5 rounded-lg text-zinc-400 hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
+                >
+                  <Flag className="w-3.5 h-3.5" />
+                </button>
+              )}
               <button
                 type="button"
                 onClick={toggleSoundMute}
                 title={isSoundMuted ? "Unmute Sound Effects" : "Mute Sound Effects"}
-                className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
-                  isSoundMuted
-                    ? "text-red-400 hover:bg-red-50"
-                    : "text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100"
-                }`}
+                className={`p-1.5 rounded-lg transition-colors cursor-pointer ${isSoundMuted
+                  ? "text-red-400 hover:bg-red-50"
+                  : "text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100"
+                  }`}
               >
                 {isSoundMuted ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
               </button>
@@ -2289,11 +2572,10 @@ export default function Home() {
                     {isYou ? "You" : "Stranger"} • {msg.timestamp}
                   </span>
                   <div
-                    className={`max-w-[85%] px-3 py-1.5 rounded-xl text-xs leading-relaxed ${
-                      isYou
-                        ? "bg-zinc-950 text-white rounded-tr-2xs shadow-2xs"
-                        : "bg-white text-zinc-800 border border-zinc-200/70 rounded-tl-2xs shadow-2xs"
-                    }`}
+                    className={`max-w-[85%] px-3 py-1.5 rounded-xl text-xs leading-relaxed ${isYou
+                      ? "bg-zinc-950 text-white rounded-tr-2xs shadow-2xs"
+                      : "bg-white text-zinc-800 border border-zinc-200/70 rounded-tl-2xs shadow-2xs"
+                      }`}
                   >
                     {msg.text}
                   </div>
@@ -2336,11 +2618,10 @@ export default function Home() {
             <button
               type="submit"
               disabled={!inputMessage.trim() || status !== "connected"}
-              className={`p-2 rounded-xl transition-all shadow-2xs ${
-                inputMessage.trim() && status === "connected"
-                  ? "bg-zinc-950 text-white hover:bg-zinc-800 active:scale-95 cursor-pointer"
-                  : "bg-zinc-100 text-zinc-300 border border-zinc-200/40 cursor-not-allowed"
-              }`}
+              className={`p-2 rounded-xl transition-all shadow-2xs ${inputMessage.trim() && status === "connected"
+                ? "bg-zinc-950 text-white hover:bg-zinc-800 active:scale-95 cursor-pointer"
+                : "bg-zinc-100 text-zinc-300 border border-zinc-200/40 cursor-not-allowed"
+                }`}
             >
               <Send className="w-3.5 h-3.5" />
             </button>
