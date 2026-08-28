@@ -1,0 +1,13 @@
+{
+  "name": "omeglo-cron-cleanup",
+  "version": "1.0.0",
+  "description": "Cloudflare Scheduled Cron Worker for Omeglo D1 Auto-Cleanup",
+  "main": "src/index.js",
+  "scripts": {
+    "deploy": "wrangler deploy",
+    "dev": "wrangler dev"
+  },
+  "devDependencies": {
+    "wrangler": "^3.0.0"
+  }
+}

@@ -325,15 +325,6 @@ io.on("connection", (socket) => {
   });
 });
 
-// Automated 90-Day Auto-Cleanup Job (Runs 5s after startup, and every 24 hours)
-setTimeout(() => {
-  d1.cleanupOldGuestData(90).catch((err) => console.error("[-] Initial Cleanup Error:", err));
-}, 5000);
-
-setInterval(() => {
-  d1.cleanupOldGuestData(90).catch((err) => console.error("[-] Scheduled Daily Cleanup Error:", err));
-}, 24 * 60 * 60 * 1000); // 24 Hours
-
 server.listen(PORT, () => {
   console.log(`🚀 Omeglo Toxic Shadow Quarantine Matchmaking Backend running on http://localhost:${PORT}`);
 });
