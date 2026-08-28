@@ -286,7 +286,9 @@ function TvStaticCanvas() {
 }
 
 const SOCKET_URL =
-  process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:5001";
+  process.env.NEXT_PUBLIC_SOCKET_URL ||
+  process.env.NEXT_PUBLIC_SERVER_URL ||
+  "https://omeglo-backend.pocoma3486.workers.dev";
 
 export default function Home() {
   const [status, setStatus] = useState<ConnectionStatus>("idle");
