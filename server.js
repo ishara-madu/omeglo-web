@@ -17,28 +17,29 @@ const io = new Server(server, {
 
 const PORT = process.env.PORT || 5001;
 
-// Ephemeral Matchmaking State
-// waitingQueue: Array<{ socketId: string, peerId: string, gender: string, lookingFor: string, mode: "video" | "text" }>
-const waitingQueue = [];
-// activePairs: Map<socketId, { partnerSocketId: string, partnerPeerId: string, mode: string }>
+// Completely Separated Ephemeral Matchmaking Queues
+// Video Queue: users wanting Video + Audio + Text
+const videoQueue = [];
+// Text Queue: users wanting Text Only
+const textQueue = [];
+
+// activePairs: Map<socketId, { partnerSocketId: string, partnerPeerId: string, mode: "video" | "text" }>
 const activePairs = new Map();
 
-// Helper: Remove user from waiting queue
-function removeFromQueue(socketId) {
-  const index = waitingQueue.findIndex((u) => u.socketId === socketId);
-  if (index !== -1) {
-    waitingQueue.splice(index, 1);
-  }
+// Helper: Remove user from all queues
+function removeFromAllQueues(socketId) {
+  const vIdx = videoQueue.findIndex((u) => u.socketId === socketId);
+  if (vIdx !== -1) videoQueue.splice(vIdx, 1);
+
+  const tIdx = textQueue.findIndex((u) => u.socketId === socketId);
+  if (tIdx !== -1) textQueue.splice(tIdx, 1);
 }
 
-// Helper: Find a compatible match in the queue
-function findCompatibleMatch(user) {
-  for (let i = 0; i < waitingQueue.length; i++) {
-    const candidate = waitingQueue[i];
+// Helper: Find a compatible match in the specific mode queue only
+function findCompatibleMatch(user, queue) {
+  for (let i = 0; i < queue.length; i++) {
+    const candidate = queue[i];
     if (candidate.socketId === user.socketId) continue;
-
-    // Strict Mode Isolation: Video matches Video, Text matches Text
-    if (candidate.mode !== user.mode) continue;
 
     // Check user preference vs candidate gender
     const userLikesCandidate =
@@ -49,7 +50,7 @@ function findCompatibleMatch(user) {
 
     if (userLikesCandidate && candidateLikesUser) {
       // Remove candidate from queue and return
-      waitingQueue.splice(i, 1);
+      queue.splice(i, 1);
       return candidate;
     }
   }
@@ -73,7 +74,8 @@ app.get("/", (req, res) => {
     status: "online",
     name: "Omeglo Matchmaking Backend",
     onlineSockets: io.engine.clientsCount,
-    waitingInQueue: waitingQueue.length,
+    videoQueueSize: videoQueue.length,
+    textQueueSize: textQueue.length,
     activeMatches: activePairs.size / 2,
   });
 });
@@ -93,7 +95,7 @@ io.on("connection", (socket) => {
     const chatMode = mode === "text" ? "text" : "video";
 
     // Clean up any existing state for this user
-    removeFromQueue(socket.id);
+    removeFromAllQueues(socket.id);
     cleanupActivePair(socket.id);
 
     const currentUser = {
@@ -104,10 +106,12 @@ io.on("connection", (socket) => {
       mode: chatMode,
     };
 
-    const match = findCompatibleMatch(currentUser);
+    // Strict Mode Isolation: Text users go to textQueue only; Video users go to videoQueue only
+    const targetQueue = chatMode === "text" ? textQueue : videoQueue;
+    const match = findCompatibleMatch(currentUser, targetQueue);
 
     if (match) {
-      console.log(`[!] Match found (${chatMode.toUpperCase()}): ${socket.id} (Initiator) <-> ${match.socketId}`);
+      console.log(`[!] Match found [${chatMode.toUpperCase()} ONLY]: ${socket.id} (Initiator) <-> ${match.socketId}`);
 
       // Register active pair
       activePairs.set(socket.id, {
@@ -137,16 +141,16 @@ io.on("connection", (socket) => {
         mode: chatMode,
       });
     } else {
-      // Add to waiting queue
-      waitingQueue.push(currentUser);
+      // Add to isolated mode queue
+      targetQueue.push(currentUser);
       socket.emit("waiting-in-queue");
-      console.log(`[*] User waiting in [${chatMode}] queue: ${socket.id} (Queue size: ${waitingQueue.length})`);
+      console.log(`[*] User waiting in [${chatMode.toUpperCase()}] queue: ${socket.id} (Queue size: ${targetQueue.length})`);
     }
   });
 
   // Event: User clicks 'Stop' or leaves chat
   socket.on("leave-chat", () => {
-    removeFromQueue(socket.id);
+    removeFromAllQueues(socket.id);
     cleanupActivePair(socket.id);
     socket.emit("chat-stopped");
   });
@@ -154,7 +158,7 @@ io.on("connection", (socket) => {
   // Event: Socket disconnects
   socket.on("disconnect", () => {
     console.log(`[-] User disconnected: ${socket.id}`);
-    removeFromQueue(socket.id);
+    removeFromAllQueues(socket.id);
     cleanupActivePair(socket.id);
     io.emit("online-count", io.engine.clientsCount);
   });

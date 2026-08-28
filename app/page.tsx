@@ -702,6 +702,13 @@ export default function Home() {
       if (savedMode === "video" || savedMode === "text") {
         setChatMode(savedMode);
       }
+
+      const savedSoundMuted = localStorage.getItem("omeglo_sound_muted");
+      if (savedSoundMuted !== null) {
+        const isMuted = savedSoundMuted === "true";
+        setIsSoundMuted(isMuted);
+        isSoundMutedRef.current = isMuted;
+      }
     } catch {
       setShowGenderModal(true);
     }
@@ -745,8 +752,15 @@ export default function Home() {
         myPeerIdRef.current = id;
       });
 
-      // Handle Incoming Call from Stranger (In Video Mode)
+      // Handle Incoming Call from Stranger (In Video Mode Only)
       peer.on("call", async (incomingCall) => {
+        // Strictly reject incoming video calls if current user is in Text Mode
+        if (chatModeRef.current === "text") {
+          console.warn("Rejected incoming video call: current mode is Text Only");
+          incomingCall.close();
+          return;
+        }
+
         const stream = localStreamRef.current || (await initLocalStream());
         if (stream) {
           incomingCall.answer(stream);
@@ -876,6 +890,13 @@ export default function Home() {
 
     if (mode === "video") {
       initLocalStream();
+    } else if (mode === "text") {
+      // Completely release camera and microphone tracks in Text mode
+      if (localStreamRef.current) {
+        localStreamRef.current.getTracks().forEach((track) => track.stop());
+        localStreamRef.current = null;
+        setLocalStream(null);
+      }
     }
   };
 
@@ -1063,6 +1084,18 @@ export default function Home() {
           track.enabled = !nextMuted;
         });
       }
+      return nextMuted;
+    });
+  };
+
+  // Handle Sound Effects Mute Toggle (Persists to localStorage)
+  const toggleSoundMute = () => {
+    setIsSoundMuted((prev) => {
+      const nextMuted = !prev;
+      isSoundMutedRef.current = nextMuted;
+      try {
+        localStorage.setItem("omeglo_sound_muted", String(nextMuted));
+      } catch {}
       return nextMuted;
     });
   };
@@ -2063,7 +2096,7 @@ export default function Home() {
             <div className="flex items-center gap-1">
               <button
                 type="button"
-                onClick={() => setIsSoundMuted(!isSoundMuted)}
+                onClick={toggleSoundMute}
                 title={isSoundMuted ? "Unmute Sound Effects" : "Mute Sound Effects"}
                 className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
                   isSoundMuted
