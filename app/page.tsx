@@ -1757,89 +1757,81 @@ export default function Home() {
 
       {/* REPORT STRANGER MODAL */}
       {showReportModal && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
           <div className="bg-white rounded-3xl p-6 sm:p-7 max-w-md w-full border border-zinc-200 shadow-2xl flex flex-col relative text-left">
             {/* Close Button */}
             <button
               type="button"
               onClick={() => setShowReportModal(false)}
-              className="absolute top-4 right-4 p-1.5 rounded-full text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 transition-colors cursor-pointer"
+              className="absolute top-5 right-5 p-1.5 rounded-full text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 transition-colors cursor-pointer"
             >
               <X className="w-4 h-4" />
             </button>
 
             {/* Modal Header */}
-            <div className="flex items-center gap-3 mb-3">
-              <div className="w-10 h-10 rounded-2xl bg-red-50 border border-red-100 flex items-center justify-center text-red-600 shrink-0 shadow-2xs">
-                <ShieldAlert className="w-5 h-5 stroke-[2.25]" />
-              </div>
-              <div>
-                <h2 className="text-base sm:text-lg font-bold text-zinc-950 leading-tight">
-                  Report Stranger
-                </h2>
-                <p className="text-[11px] text-zinc-500">
-                  Reports are 100% anonymous & protect our community.
-                </p>
-              </div>
+            <div className="mb-4 pr-6">
+              <h2 className="text-lg font-bold text-zinc-950 tracking-tight">
+                Report Stranger
+              </h2>
+              <p className="text-xs text-zinc-500 mt-1 leading-relaxed">
+                Reports are anonymous. Select a reason below to disconnect and submit a report.
+              </p>
             </div>
 
-            {/* Subtitle / Explanation */}
-            <p className="text-xs text-zinc-600 mb-3.5 bg-zinc-50 p-2.5 rounded-xl border border-zinc-200/60 leading-relaxed">
-              Select the reason for reporting. Submitting will immediately disconnect you and flag this user in our system.
-            </p>
-
-            {/* Reason Selection Radio Cards */}
-            <div className="space-y-2 mb-3.5">
+            {/* Reason Selection Radio List */}
+            <div className="space-y-2 mb-4">
               {[
-                { id: "nudity", label: "Nudity or Sexual Content", desc: "Explicit acts, nudity, or inappropriate NSFW behavior", icon: "🔞" },
-                { id: "harassment", label: "Harassment or Hate Speech", desc: "Bullying, abusive words, threats, or discrimination", icon: "🚫" },
-                { id: "underage", label: "Underage User", desc: "Stranger appears to be a minor", icon: "👶" },
-                { id: "spam", label: "Spam, Bot or Advertising", desc: "Recorded video, automated bots, or promotions", icon: "📢" },
-                { id: "other", label: "Other Violation", desc: "Other disruptive or rule-breaking behavior", icon: "⚠️" },
-              ].map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => setReportReason(item.id)}
-                  className={`w-full p-2.5 sm:p-3 rounded-xl border text-left flex items-center gap-3 transition-all cursor-pointer ${
-                    reportReason === item.id
-                      ? "border-red-500 bg-red-50/50 ring-1.5 ring-red-500/50 shadow-2xs"
-                      : "border-zinc-200 hover:border-zinc-300 hover:bg-zinc-50/60"
-                  }`}
-                >
-                  <span className="text-lg shrink-0">{item.icon}</span>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-xs font-semibold text-zinc-900 leading-snug">
-                      {item.label}
-                    </div>
-                    <div className="text-[10px] text-zinc-500 truncate">
-                      {item.desc}
-                    </div>
-                  </div>
-                  <div
-                    className={`w-4 h-4 rounded-full border flex items-center justify-center transition-colors shrink-0 ${
-                      reportReason === item.id
-                        ? "border-red-600 bg-red-600 text-white"
-                        : "border-zinc-300 bg-white"
+                { id: "nudity", label: "Nudity or Sexual Content", desc: "Explicit acts, nudity, or inappropriate NSFW behavior" },
+                { id: "harassment", label: "Harassment or Hate Speech", desc: "Bullying, abusive words, threats, or discrimination" },
+                { id: "underage", label: "Underage User", desc: "Stranger appears to be a minor" },
+                { id: "spam", label: "Spam or Advertising", desc: "Recorded video, automated bots, or promotions" },
+                { id: "other", label: "Other Violation", desc: "Other disruptive or rule-breaking behavior" },
+              ].map((item) => {
+                const isSelected = reportReason === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => setReportReason(item.id)}
+                    className={`w-full p-3 rounded-xl border text-left flex items-center justify-between gap-3 transition-all cursor-pointer ${
+                      isSelected
+                        ? "border-zinc-950 bg-zinc-50 ring-1 ring-zinc-950 shadow-2xs"
+                        : "border-zinc-200 hover:border-zinc-300 hover:bg-zinc-50/50"
                     }`}
                   >
-                    {reportReason === item.id && <Check className="w-2.5 h-2.5 stroke-[3]" />}
-                  </div>
-                </button>
-              ))}
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs font-semibold text-zinc-900 leading-snug">
+                        {item.label}
+                      </div>
+                      <div className="text-[11px] text-zinc-500 mt-0.5">
+                        {item.desc}
+                      </div>
+                    </div>
+                    <div
+                      className={`w-4 h-4 rounded-full border flex items-center justify-center transition-colors shrink-0 ${
+                        isSelected
+                          ? "border-zinc-950 bg-zinc-950 text-white"
+                          : "border-zinc-300 bg-white"
+                      }`}
+                    >
+                      {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                    </div>
+                  </button>
+                );
+              })}
             </div>
 
             {/* Optional Details Input */}
-            <div className="mb-4">
-              <label className="block text-[11px] font-medium text-zinc-600 mb-1">
-                Additional Details (Optional)
+            <div className="mb-5">
+              <label className="block text-xs font-medium text-zinc-700 mb-1.5">
+                Additional Details <span className="text-zinc-400 font-normal">(Optional)</span>
               </label>
               <input
                 type="text"
                 value={reportDetails}
                 onChange={(e) => setReportDetails(e.target.value)}
                 placeholder="Briefly describe what happened..."
-                className="w-full h-9 px-3 text-xs bg-zinc-50 border border-zinc-200 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-zinc-900 focus:bg-white text-zinc-900 placeholder:text-zinc-400"
+                className="w-full h-10 px-3.5 text-xs bg-zinc-50 border border-zinc-200 rounded-xl focus:outline-hidden focus:ring-1.5 focus:ring-zinc-950 focus:bg-white text-zinc-900 placeholder:text-zinc-400 transition-all"
               />
             </div>
 
@@ -1848,7 +1840,7 @@ export default function Home() {
               <button
                 type="button"
                 onClick={() => setShowReportModal(false)}
-                className="flex-1 h-10 rounded-xl bg-zinc-100 hover:bg-zinc-200 text-zinc-700 text-xs font-medium transition-colors cursor-pointer text-center"
+                className="flex-1 h-10 rounded-xl bg-zinc-100 hover:bg-zinc-200/80 text-zinc-700 text-xs font-medium transition-colors cursor-pointer text-center"
               >
                 Cancel
               </button>
@@ -1856,10 +1848,9 @@ export default function Home() {
                 type="button"
                 disabled={isSubmittingReport}
                 onClick={handleSubmitReport}
-                className="flex-1 h-10 rounded-xl bg-red-600 hover:bg-red-700 active:scale-[0.98] text-white text-xs font-semibold transition-all shadow-xs cursor-pointer flex items-center justify-center gap-1.5 disabled:opacity-50"
+                className="flex-1 h-10 rounded-xl bg-zinc-950 hover:bg-zinc-800 active:scale-[0.98] text-white text-xs font-semibold transition-all shadow-xs cursor-pointer flex items-center justify-center disabled:opacity-50"
               >
-                <Flag className="w-3.5 h-3.5 fill-current" />
-                <span>Submit & Skip</span>
+                Submit Report
               </button>
             </div>
           </div>
@@ -2092,10 +2083,10 @@ export default function Home() {
                   type="button"
                   onClick={handleOpenReportModal}
                   title="Report this stranger"
-                  className="bg-black/60 hover:bg-red-950/80 hover:border-red-500/50 backdrop-blur-md text-[11px] text-zinc-300 hover:text-red-300 px-2.5 py-1 rounded-full border border-white/10 flex items-center gap-1.5 transition-colors cursor-pointer shadow-sm"
+                  aria-label="Report stranger"
+                  className="bg-black/60 hover:bg-red-950/40 hover:border-red-500/30 backdrop-blur-md text-zinc-400 hover:text-red-400 p-1.5 rounded-full border border-white/10 flex items-center justify-center transition-all cursor-pointer shadow-sm active:scale-95"
                 >
-                  <Flag className="w-3 h-3 text-red-400 fill-red-400/30" />
-                  <span>Report</span>
+                  <Flag className="w-3 h-3 text-red-400/80" />
                 </button>
                 <div className="bg-black/60 backdrop-blur-md text-[11px] text-zinc-300 px-2.5 py-1 rounded-full border border-white/10 flex items-center gap-1.5 pointer-events-none">
                   <span className={`w-1.5 h-1.5 rounded-full ${liveCallQuality === "good" ? "bg-emerald-400" : "bg-amber-400 animate-pulse"}`} />
