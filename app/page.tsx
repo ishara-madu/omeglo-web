@@ -23,6 +23,11 @@ import {
   Radio,
   Check,
   Edit2,
+  Camera,
+  AlertTriangle,
+  Lock,
+  Settings,
+  X,
 } from "lucide-react";
 
 type ChatMessage = {
@@ -113,6 +118,12 @@ export default function Home() {
   const [onlineCount, setOnlineCount] = useState("1");
   const [strangerGender, setStrangerGender] = useState<Gender>(null);
 
+  // Media Streams & Permission State
+  const [localStream, setLocalStream] = useState<MediaStream | null>(null);
+  const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
+  const [hasCameraPermission, setHasCameraPermission] = useState<boolean | null>(null);
+  const [showPermissionModal, setShowPermissionModal] = useState(false);
+
   // User Gender State & First-time Visit Modal
   const [userGender, setUserGender] = useState<Gender>(null);
   const [showGenderModal, setShowGenderModal] = useState(false);
@@ -159,9 +170,33 @@ export default function Home() {
     ]);
   }, []);
 
-  // Setup P2P DataChannel Connection for text chat
+  // Bind local stream to local video element
+  useEffect(() => {
+    if (localVideoRef.current && localStream) {
+      localVideoRef.current.srcObject = localStream;
+      localVideoRef.current.play().catch((err) => {
+        console.warn("Local video play warning:", err);
+      });
+    }
+  }, [localStream]);
+
+  // Bind remote stream to remote video element
+  useEffect(() => {
+    if (remoteVideoRef.current && remoteStream) {
+      remoteVideoRef.current.srcObject = remoteStream;
+      remoteVideoRef.current.play().catch((err) => {
+        console.warn("Remote video play warning:", err);
+      });
+    }
+  }, [remoteStream]);
+
+  // Setup PeerJS P2P DataChannel Connection for direct peer-to-peer live text chat
   const setupDataConnection = useCallback((conn: DataConnection) => {
     dataConnRef.current = conn;
+
+    conn.on("open", () => {
+      console.log("🟢 PeerJS P2P DataChannel connected and ready for live chat.");
+    });
 
     conn.on("data", (data: unknown) => {
       if (typeof data === "string") {
@@ -178,31 +213,75 @@ export default function Home() {
     });
 
     conn.on("close", () => {
-      console.log("Data connection closed");
+      console.log("🔴 PeerJS P2P Data connection closed.");
+    });
+
+    conn.on("error", (err) => {
+      console.warn("PeerJS DataConnection error:", err);
     });
   }, []);
 
-  // Initialize Local User Media (Camera & Mic)
-  const initLocalStream = useCallback(async () => {
-    if (localStreamRef.current) return localStreamRef.current;
+  // Request & Initialize Local Real Camera and Microphone
+  const initLocalStream = useCallback(async (): Promise<MediaStream | null> => {
+    if (localStreamRef.current && localStreamRef.current.active) {
+      return localStreamRef.current;
+    }
+
+    if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) {
+      setHasCameraPermission(false);
+      return null;
+    }
+
+    // 1. Primary Attempt: Standard video & audio
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: "user" },
+        video: { width: { ideal: 640 }, height: { ideal: 480 } },
         audio: true,
       });
       localStreamRef.current = stream;
-      if (localVideoRef.current) {
-        localVideoRef.current.srcObject = stream;
-      }
+      setLocalStream(stream);
+      setHasCameraPermission(true);
+      setShowPermissionModal(false);
       return stream;
-    } catch (err) {
-      console.error("Camera/Mic access denied or error:", err);
-      addSystemMessage("Could not access camera or microphone. Please allow permissions.");
-      return null;
-    }
-  }, [addSystemMessage]);
+    } catch (err1) {
+      console.warn("Attempt 1 (standard video+audio) failed:", err1);
 
-  // Clean up current active call and media streams for remote
+      // 2. Secondary Attempt: Loose constraints
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: true,
+        });
+        localStreamRef.current = stream;
+        setLocalStream(stream);
+        setHasCameraPermission(true);
+        setShowPermissionModal(false);
+        return stream;
+      } catch (err2) {
+        console.warn("Attempt 2 (loose video+audio) failed:", err2);
+
+        // 3. Tertiary Attempt: Video Only (in case no mic exists)
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({
+            video: true,
+            audio: false,
+          });
+          localStreamRef.current = stream;
+          setLocalStream(stream);
+          setHasCameraPermission(true);
+          setShowPermissionModal(false);
+          setIsMicMuted(true);
+          return stream;
+        } catch (err3) {
+          console.warn("Attempt 3 (video-only) failed:", err3);
+          setHasCameraPermission(false);
+          return null;
+        }
+      }
+    }
+  }, []);
+
+  // Clean up current active call and remote streams
   const cleanupCall = useCallback(() => {
     if (activeCallRef.current) {
       activeCallRef.current.close();
@@ -212,6 +291,7 @@ export default function Home() {
       dataConnRef.current.close();
       dataConnRef.current = null;
     }
+    setRemoteStream(null);
     if (remoteVideoRef.current) {
       remoteVideoRef.current.srcObject = null;
     }
@@ -286,10 +366,8 @@ export default function Home() {
           incomingCall.answer();
         }
 
-        incomingCall.on("stream", (remoteStream) => {
-          if (remoteVideoRef.current) {
-            remoteVideoRef.current.srcObject = remoteStream;
-          }
+        incomingCall.on("stream", (incomingRemoteStream) => {
+          setRemoteStream(incomingRemoteStream);
         });
 
         activeCallRef.current = incomingCall;
@@ -319,16 +397,14 @@ export default function Home() {
       addSystemMessage("Connected with a stranger! Say hi.");
 
       // Ensure local camera is streaming
-      const localStream = localStreamRef.current || (await initLocalStream());
+      const stream = localStreamRef.current || (await initLocalStream());
 
       if (initiator && peerRef.current && partnerPeerId) {
         // Initiator calls partner
-        if (localStream) {
-          const call = peerRef.current.call(partnerPeerId, localStream);
-          call?.on("stream", (remoteStream: MediaStream) => {
-            if (remoteVideoRef.current) {
-              remoteVideoRef.current.srcObject = remoteStream;
-            }
+        if (stream) {
+          const call = peerRef.current.call(partnerPeerId, stream);
+          call?.on("stream", (partnerStream: MediaStream) => {
+            setRemoteStream(partnerStream);
           });
           activeCallRef.current = call;
         }
@@ -364,13 +440,21 @@ export default function Home() {
     };
   }, [addSystemMessage, cleanupCall, initLocalStream, setupDataConnection]);
 
-  // Save selected gender
+  // Request Camera automatically after onboarding / on mount
+  useEffect(() => {
+    if (!showGenderModal) {
+      initLocalStream();
+    }
+  }, [showGenderModal, initLocalStream]);
+
+  // Save selected gender & trigger camera access
   const handleSaveGender = (gender: "male" | "female") => {
     try {
       localStorage.setItem("omeglo_user_gender", gender);
     } catch {}
     setUserGender(gender);
     setShowGenderModal(false);
+    initLocalStream();
   };
 
   // Change match preference
@@ -452,9 +536,15 @@ export default function Home() {
     return "Looking for a stranger...";
   };
 
-  // Handle Start Matchmaking
+  // Handle Start Matchmaking (STRICT CAMERA ENFORCEMENT)
   const handleStart = useCallback(async () => {
-    await initLocalStream();
+    // 1. Mandatory camera stream check
+    const stream = await initLocalStream();
+    if (!stream || stream.getVideoTracks().length === 0) {
+      setShowPermissionModal(true);
+      return;
+    }
+
     if (!myPeerIdRef.current) {
       addSystemMessage("Connecting to peer network... Please wait.");
       return;
@@ -479,9 +569,14 @@ export default function Home() {
     setStatus("disconnected");
   }, [cleanupCall, status]);
 
-  // Handle Next (Skip Stranger & Find New Match)
+  // Handle Next (Skip Stranger & Find New Match - STRICT CAMERA ENFORCEMENT)
   const handleNext = useCallback(async () => {
-    await initLocalStream();
+    const stream = await initLocalStream();
+    if (!stream || stream.getVideoTracks().length === 0) {
+      setShowPermissionModal(true);
+      return;
+    }
+
     cleanupCall();
     setStatus("searching");
     addSystemMessage(`Skipping... ${getSearchTargetText()}`);
@@ -500,7 +595,7 @@ export default function Home() {
     if (localStreamRef.current) {
       const audioTrack = localStreamRef.current.getAudioTracks()[0];
       if (audioTrack) {
-        audioTrack.enabled = isMicMuted; // Toggle enabled state
+        audioTrack.enabled = isMicMuted;
         setIsMicMuted(!isMicMuted);
       }
     } else {
@@ -513,7 +608,7 @@ export default function Home() {
     if (localStreamRef.current) {
       const videoTrack = localStreamRef.current.getVideoTracks()[0];
       if (videoTrack) {
-        videoTrack.enabled = isVideoOff; // Toggle enabled state
+        videoTrack.enabled = isVideoOff;
         setIsVideoOff(!isVideoOff);
       }
     } else {
@@ -524,7 +619,7 @@ export default function Home() {
   // Keyboard Shortcuts (Esc to Stop/Next)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (showGenderModal) return;
+      if (showGenderModal || showPermissionModal) return;
       if (document.activeElement === inputRef.current) {
         if (e.key === "Escape") {
           inputRef.current?.blur();
@@ -543,7 +638,7 @@ export default function Home() {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [status, handleNext, handleStart, showGenderModal]);
+  }, [status, handleNext, handleStart, showGenderModal, showPermissionModal]);
 
   // Handle Send Message via P2P DataChannel
   const handleSendMessage = (e: React.FormEvent) => {
@@ -582,6 +677,78 @@ export default function Home() {
 
   return (
     <div className="min-h-screen flex flex-col bg-zinc-50 text-zinc-900 font-sans selection:bg-zinc-900 selection:text-white select-none sm:select-auto">
+      {/* CAMERA & MIC PERMISSION MANDATORY MODAL */}
+      {showPermissionModal && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl p-6 sm:p-7 max-w-md w-full border border-zinc-200 shadow-2xl flex flex-col items-center text-center relative">
+            {/* Close Button */}
+            <button
+              onClick={() => setShowPermissionModal(false)}
+              className="absolute top-4 right-4 p-1.5 rounded-full text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 transition-colors cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            {/* Warning Icon Badge */}
+            <div className="w-14 h-14 rounded-2xl bg-amber-50 border border-amber-200 p-3 flex items-center justify-center mb-3.5 text-amber-600 shadow-xs">
+              <Camera className="w-7 h-7" />
+            </div>
+
+            <h2 className="text-lg font-bold tracking-tight text-zinc-950 mb-1.5">
+              Camera & Microphone Access Required
+            </h2>
+            <p className="text-xs text-zinc-500 mb-5 leading-relaxed">
+              Omeglo is a live random video chat. You must enable your camera and microphone to start chatting with strangers.
+            </p>
+
+            {/* macOS & Browser Troubleshooting Guide Box */}
+            <div className="w-full bg-zinc-50 border border-zinc-200/80 rounded-2xl p-3.5 mb-5 text-left text-xs space-y-2.5">
+              <div className="flex items-start gap-2 text-zinc-700">
+                <Lock className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
+                <span>
+                  <strong>1. Browser Address Bar:</strong> Click the lock/camera icon next to the URL and set Camera to <strong>&ldquo;Allow&rdquo;</strong>.
+                </span>
+              </div>
+              <div className="flex items-start gap-2 text-zinc-700">
+                <Settings className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
+                <span>
+                  <strong>2. On macOS:</strong> Open <strong>System Settings ➡️ Privacy & Security ➡️ Camera</strong> and toggle your browser <strong>ON</strong>.
+                </span>
+              </div>
+              <div className="flex items-start gap-2 text-zinc-500 text-[11px]">
+                <Info className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                <span>Make sure your MacBook lid is open and FaceTime camera is not in use by another app.</span>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex flex-col sm:flex-row items-center gap-2.5 w-full">
+              <button
+                type="button"
+                onClick={async () => {
+                  const stream = await initLocalStream();
+                  if (stream && stream.getVideoTracks().length > 0) {
+                    setShowPermissionModal(false);
+                    handleStart();
+                  }
+                }}
+                className="w-full h-11 rounded-xl bg-zinc-950 hover:bg-zinc-800 active:scale-[0.98] text-white text-xs font-semibold transition-all shadow-xs cursor-pointer flex items-center justify-center gap-2"
+              >
+                <Camera className="w-3.5 h-3.5" />
+                <span>Grant Access & Start Chat</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowPermissionModal(false)}
+                className="w-full sm:w-auto h-11 px-5 rounded-xl border border-zinc-200 hover:bg-zinc-100 text-zinc-600 text-xs font-medium transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* FIRST-TIME GENDER SELECTION MODAL */}
       {showGenderModal && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
@@ -767,8 +934,8 @@ export default function Home() {
               ref={remoteVideoRef}
               autoPlay
               playsInline
-              className={`absolute inset-0 w-full h-full object-cover z-0 ${
-                status === "connected" ? "block" : "hidden"
+              className={`absolute inset-0 w-full h-full object-cover z-0 transition-opacity duration-300 ${
+                status === "connected" && remoteStream ? "opacity-100 block" : "opacity-0 hidden"
               }`}
             />
 
@@ -879,23 +1046,23 @@ export default function Home() {
               }}
               className={`absolute ${
                 !pipPos ? "bottom-4 right-4" : ""
-              } z-20 w-32 h-44 sm:w-38 sm:h-50 bg-zinc-900/95 border border-white/20 rounded-2xl shadow-2xl overflow-hidden backdrop-blur-md flex flex-col justify-between p-2.5 transition-shadow ${
+              } z-20 w-32 h-44 sm:w-38 sm:h-50 bg-zinc-950 border border-white/20 rounded-2xl shadow-2xl overflow-hidden backdrop-blur-md flex flex-col justify-between p-2.5 transition-shadow ${
                 isDragging ? "cursor-grabbing ring-2 ring-zinc-400/40" : "cursor-grab hover:border-white/40"
               }`}
             >
-              {/* Local Webcam Video Stream */}
+              {/* Local Webcam Video Stream (Mirrored, z-0) */}
               <video
                 ref={localVideoRef}
                 autoPlay
                 playsInline
                 muted
-                className={`absolute inset-0 w-full h-full object-cover -z-10 ${
-                  isVideoOff ? "opacity-0" : "opacity-100"
+                className={`absolute inset-0 w-full h-full object-cover z-0 scale-x-[-1] pointer-events-none transition-opacity duration-200 ${
+                  isVideoOff || !localStream || hasCameraPermission === false ? "opacity-0" : "opacity-100"
                 }`}
               />
 
-              {/* Drag Handle & Label */}
-              <div className="flex items-center justify-between w-full z-10">
+              {/* Drag Handle & Label (z-10 above video) */}
+              <div className="relative z-10 flex items-center justify-between w-full">
                 <div className="flex items-center gap-1.5 bg-black/60 backdrop-blur-md px-2 py-0.5 rounded-full border border-white/10 text-white text-[10px] font-medium">
                   {userGender ? (
                     <div className="w-3 h-3 rounded-full overflow-hidden flex items-center justify-center">
@@ -917,21 +1084,48 @@ export default function Home() {
                 </div>
               </div>
 
-              {/* Video Off Fallback Avatar */}
-              {isVideoOff && (
-                <div className="flex-1 flex flex-col items-center justify-center my-1 pointer-events-none z-10">
-                  <div className="flex flex-col items-center gap-1">
-                    <VideoOff className="w-5 h-5 text-zinc-500" />
-                    <span className="text-[10px] text-zinc-500">Camera Off</span>
-                  </div>
+              {/* Fallback View if Video is Off or Permission Pending */}
+              {(isVideoOff || !localStream || hasCameraPermission === false) && (
+                <div className="relative z-10 flex-1 flex flex-col items-center justify-center my-1 pointer-events-none">
+                  {hasCameraPermission === false ? (
+                    <button
+                      type="button"
+                      onClick={() => setShowPermissionModal(true)}
+                      className="pointer-events-auto p-2 rounded-xl bg-amber-500/20 border border-amber-400/40 text-amber-300 flex flex-col items-center gap-1 cursor-pointer hover:bg-amber-500/30 transition-colors"
+                    >
+                      <AlertTriangle className="w-5 h-5 text-amber-400" />
+                      <span className="text-[9px] font-medium text-amber-200">Enable Cam</span>
+                    </button>
+                  ) : (
+                    <div className="flex flex-col items-center gap-1.5">
+                      <div className="w-10 h-10 rounded-2xl bg-zinc-800/80 border border-zinc-700/80 p-1.5 flex items-center justify-center shadow-inner">
+                        {userGender ? (
+                          <Image
+                            src={userGender === "male" ? "/male.svg" : "/female.svg"}
+                            alt="Self Avatar"
+                            width={40}
+                            height={40}
+                            className="w-full h-full object-contain"
+                          />
+                        ) : (
+                          <User className="w-5 h-5 stroke-[1.5] text-zinc-400" />
+                        )}
+                      </div>
+                      <span className="text-[10px] text-zinc-400 font-medium">
+                        {isVideoOff ? "Camera Off" : "Your Camera"}
+                      </span>
+                    </div>
+                  )}
                 </div>
               )}
 
-              {/* Spacer if video is visible */}
-              {!isVideoOff && <div className="flex-1" />}
+              {/* Spacer when video is live */}
+              {!isVideoOff && localStream && hasCameraPermission !== false && (
+                <div className="flex-1 pointer-events-none" />
+              )}
 
-              {/* In-PiP Media Controls */}
-              <div className="flex items-center justify-center gap-1 bg-black/60 backdrop-blur-md py-1 px-1.5 rounded-xl border border-white/10 z-10">
+              {/* In-PiP Media Controls (z-10 above video) */}
+              <div className="relative z-10 flex items-center justify-center gap-1 bg-black/60 backdrop-blur-md py-1 px-1.5 rounded-xl border border-white/10">
                 <button
                   type="button"
                   onClick={(e) => {
@@ -951,7 +1145,11 @@ export default function Home() {
                   type="button"
                   onClick={(e) => {
                     e.stopPropagation();
-                    toggleVideo();
+                    if (!localStream) {
+                      initLocalStream();
+                    } else {
+                      toggleVideo();
+                    }
                   }}
                   title={isVideoOff ? "Turn Cam On" : "Turn Cam Off"}
                   className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
