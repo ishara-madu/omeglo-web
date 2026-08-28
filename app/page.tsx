@@ -39,6 +39,10 @@ import {
   ShieldAlert,
 } from "lucide-react";
 import { getBrowserFingerprint } from "@/lib/fingerprint";
+import { filterMessage } from "@/lib/moderation/regexFilter";
+import { initFaceDetector, detectFace } from "@/lib/moderation/faceDetection";
+import { initNsfwDetector, checkVideoFrame } from "@/lib/moderation/nsfwDetector";
+import { initToxicityDetector, checkTextToxicity } from "@/lib/moderation/toxicityDetector";
 
 type ChatMessage = {
   id: string;
@@ -284,6 +288,25 @@ export default function Home() {
   const [reportDetails, setReportDetails] = useState<string>("");
   const [isSubmittingReport, setIsSubmittingReport] = useState(false);
   const [reportToast, setReportToast] = useState<{ show: boolean; message: string } | null>(null);
+
+  // AI Moderation & Safety States (Face Detection & NSFW Shield)
+  const [showFaceModal, setShowFaceModal] = useState(false);
+  const [isNsfwBlurred, setIsNsfwBlurred] = useState(false);
+  const [aiModerationToast, setAiModerationToast] = useState<{
+    show: boolean;
+    message: string;
+    type: "warning" | "error" | "info";
+  } | null>(null);
+
+  const showModerationAlert = useCallback(
+    (message: string, type: "warning" | "error" | "info" = "warning") => {
+      setAiModerationToast({ show: true, message, type });
+      setTimeout(() => {
+        setAiModerationToast(null);
+      }, 4500);
+    },
+    []
+  );
 
   // Video & WebRTC Refs
   const localVideoRef = useRef<HTMLVideoElement>(null);
@@ -609,15 +632,26 @@ export default function Home() {
           }
         } catch { }
 
-        // 2. Regular Text Message
+        // 2. Regular Text Message (Filter & Sanitize)
         setIsStrangerTyping(false);
         playAudioSFX("message", isSoundMutedRef.current);
+
+        const filterRes = filterMessage(data);
+        const cleanIncomingText = filterRes.cleanText;
+
+        // Background Toxicity check on incoming text
+        checkTextToxicity(data).then((toxRes) => {
+          if (toxRes.isToxic) {
+            showModerationAlert("⚠️ Warning: Inappropriate language detected from stranger.", "warning");
+          }
+        }).catch(() => {});
+
         setMessages((prev) => [
           ...prev,
           {
             id: `msg-${Date.now()}-${Math.random()}`,
             sender: "stranger",
-            text: data,
+            text: cleanIncomingText,
             timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
           },
         ]);
@@ -1210,6 +1244,17 @@ export default function Home() {
         setShowPermissionModal(true);
         return;
       }
+
+      // 3. Google MediaPipe / Native Face Detection Check (Face is required for video)
+      if (localVideoRef.current) {
+        await initFaceDetector();
+        await new Promise((r) => setTimeout(r, 120));
+        const faceRes = await detectFace(localVideoRef.current);
+        if (!faceRes.hasFace) {
+          setShowFaceModal(true);
+          return;
+        }
+      }
     }
 
     if (!myPeerIdRef.current) {
@@ -1255,6 +1300,17 @@ export default function Home() {
       if (!stream || stream.getVideoTracks().length === 0) {
         setShowPermissionModal(true);
         return;
+      }
+
+      // Face Detection Check before skipping to next stranger
+      if (localVideoRef.current) {
+        await initFaceDetector();
+        await new Promise((r) => setTimeout(r, 100));
+        const faceRes = await detectFace(localVideoRef.current);
+        if (!faceRes.hasFace) {
+          setShowFaceModal(true);
+          return;
+        }
       }
     }
 
@@ -1328,6 +1384,58 @@ export default function Home() {
 
     return () => clearTimeout(timer);
   }, [status, autoNextCountdown, handleNext]);
+
+  // Real-time AI NSFW & Nudity Shield (Active Video Stream Scanner)
+  useEffect(() => {
+    if (status !== "connected" || chatMode !== "video") {
+      setIsNsfwBlurred(false);
+      return;
+    }
+
+    // Lazy load NSFW model in background (0 KB initial SEO impact)
+    initNsfwDetector().catch(() => {});
+    initToxicityDetector().catch(() => {});
+
+    const interval = setInterval(async () => {
+      // 1. Scan remote stranger video feed
+      if (remoteVideoRef.current && status === "connected") {
+        const remoteNsfw = await checkVideoFrame(remoteVideoRef.current);
+        if (remoteNsfw.isNsfw) {
+          setIsNsfwBlurred(true);
+          showModerationAlert(
+            `⚠️ AI Auto-Shield: Inappropriate content detected. Stranger reported & quarantined.`,
+            "error"
+          );
+
+          // Auto-report stranger immediately to D1
+          socketRef.current?.emit("report-partner", {
+            reason: "nudity",
+            details: `AI Auto-Detected NSFW Stream (${remoteNsfw.topCategory}: ${(remoteNsfw.probability * 100).toFixed(0)}%)`,
+          });
+
+          // Disconnect & Skip after brief blur transition
+          setTimeout(() => {
+            setIsNsfwBlurred(false);
+            handleNext();
+          }, 1400);
+          return;
+        }
+      }
+
+      // 2. Scan local video feed (warn user if user violates guidelines)
+      if (localVideoRef.current && status === "connected") {
+        const localNsfw = await checkVideoFrame(localVideoRef.current);
+        if (localNsfw.isNsfw) {
+          showModerationAlert(
+            "⚠️ Camera Warning: Inappropriate content detected on your camera. Continued violations will lead to quarantine.",
+            "error"
+          );
+        }
+      }
+    }, 1800);
+
+    return () => clearInterval(interval);
+  }, [status, chatMode, handleNext, showModerationAlert]);
 
   // Handle Mic Mute Toggle (Ensures complete hardware sync with state)
   const toggleMic = () => {
@@ -1478,25 +1586,50 @@ export default function Home() {
     }
   };
 
-  // Handle Send Message via P2P DataChannel
-  const handleSendMessage = (e: React.FormEvent) => {
+  // Handle Send Message via P2P DataChannel (with Smart Regex & AI Toxicity Moderation)
+  const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!inputMessage.trim()) return;
 
-    const msgText = inputMessage.trim();
+    const rawText = inputMessage.trim();
+
+    // 1. Smart Regex & Anti-Spam / Anti-Scam Filter
+    const filterRes = filterMessage(rawText);
+    if (filterRes.isBlocked) {
+      showModerationAlert(
+        filterRes.warningMessage || "Sharing external links and phone numbers is restricted.",
+        "warning"
+      );
+      return;
+    }
+
+    if (filterRes.warningMessage) {
+      showModerationAlert(filterRes.warningMessage, "warning");
+    }
+
+    const msgToSend = filterRes.cleanText;
+
+    // 2. Background TensorFlow.js Toxicity Model Check
+    checkTextToxicity(rawText)
+      .then((toxRes) => {
+        if (toxRes.isToxic) {
+          showModerationAlert("⚠️ Warning: Toxic, abusive, or harassing words are prohibited.", "warning");
+        }
+      })
+      .catch(() => {});
 
     // Reset typing status and send message
     if (dataConnRef.current && dataConnRef.current.open) {
       try {
         dataConnRef.current.send(JSON.stringify({ type: "typing", isTyping: false }));
-        dataConnRef.current.send(msgText);
+        dataConnRef.current.send(msgToSend);
       } catch { }
     }
 
     const newMsg: ChatMessage = {
       id: `msg-${Date.now()}`,
       sender: "you",
-      text: msgText,
+      text: msgToSend,
       timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
     };
 
@@ -1588,6 +1721,85 @@ export default function Home() {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* FACE DETECTION MANDATORY MODAL (GOOGLE MEDIAPIPE) */}
+      {showFaceModal && (
+        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl p-6 sm:p-7 max-w-md w-full border border-zinc-200 shadow-2xl flex flex-col items-center text-center relative">
+            <button
+              onClick={() => setShowFaceModal(false)}
+              className="absolute top-4 right-4 p-1.5 rounded-full text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 transition-colors cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            <div className="w-12 h-12 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-600 mb-3.5 shadow-2xs">
+              <Camera className="w-6 h-6 stroke-[2]" />
+            </div>
+
+            <h2 className="text-lg font-bold tracking-tight text-zinc-950 mb-1">
+              Face Required for Video Chat
+            </h2>
+            <p className="text-xs text-zinc-500 mb-4 leading-relaxed max-w-xs">
+              To keep Omeglo safe, real, and fun, your face must be clearly visible in the camera before matching with strangers.
+            </p>
+
+            <div className="w-full bg-zinc-50 border border-zinc-200/80 rounded-2xl p-3.5 mb-5 text-left text-xs space-y-2 text-zinc-600">
+              <div className="flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+                <span>Keep your face centered and well-lit.</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+                <span>Avoid pointing at walls, ceilings, or black screens.</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+                <span>Or switch to <strong>Text Mode</strong> if you prefer not to show video.</span>
+              </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row items-center gap-2.5 w-full">
+              <button
+                type="button"
+                onClick={async () => {
+                  setShowFaceModal(false);
+                  handleStart();
+                }}
+                className="w-full h-11 rounded-xl bg-zinc-950 hover:bg-zinc-800 active:scale-[0.98] text-white text-xs font-semibold transition-all shadow-xs cursor-pointer flex items-center justify-center gap-2"
+              >
+                <span>Check Face & Match</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowFaceModal(false);
+                  handleModeChange("text");
+                }}
+                className="w-full sm:w-auto h-11 px-4 rounded-xl bg-zinc-100 hover:bg-zinc-200 text-zinc-800 text-xs font-medium transition-colors cursor-pointer"
+              >
+                Switch to Text Mode
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* FLOATING AI & MODERATION ALERT TOAST */}
+      {aiModerationToast && (
+        <div
+          className={`fixed top-5 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-full backdrop-blur-md border shadow-2xl flex items-center gap-2 text-xs font-medium animate-in fade-in slide-in-from-top-3 ${
+            aiModerationToast.type === "error"
+              ? "bg-red-950/90 text-red-200 border-red-500/40"
+              : aiModerationToast.type === "warning"
+              ? "bg-amber-950/90 text-amber-200 border-amber-500/40"
+              : "bg-zinc-950/90 text-white border-white/20"
+          }`}
+        >
+          <AlertTriangle className="w-4 h-4 shrink-0 text-amber-400" />
+          <span>{aiModerationToast.message}</span>
         </div>
       )}
 
@@ -2044,7 +2256,7 @@ export default function Home() {
                   </div>
                 )}
 
-                {/* 3. High-Definition WebRTC Video Feed (Smoothly cross-fades into view) */}
+                {/* 3. High-Definition WebRTC Video Feed (Smoothly cross-fades into view with NSFW blur shield) */}
                 <video
                   ref={remoteVideoRef}
                   autoPlay
@@ -2053,9 +2265,11 @@ export default function Home() {
                   onLoadedData={() => setIsRemoteVideoPlaying(true)}
                   className={`absolute inset-0 w-full h-full object-cover z-0 transition-all duration-500 ${
                     status === "connected" && remoteStream
-                      ? isRemoteVideoPlaying
-                        ? "opacity-100 filter-none"
-                        : "opacity-0 filter blur-xl"
+                      ? isNsfwBlurred
+                        ? "opacity-100 filter blur-3xl brightness-50"
+                        : isRemoteVideoPlaying
+                          ? "opacity-100 filter-none"
+                          : "opacity-0 filter blur-xl"
                       : "opacity-0 hidden"
                   }`}
                 />
