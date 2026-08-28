@@ -55,8 +55,9 @@ type ConnectionStatus = "idle" | "searching" | "connected" | "disconnected";
 
 type UniversalSocket = {
   emit: (event: string, data?: any) => void;
-  on: (event: string, fn: Function) => void;
+  on: (event: string, fn: (data?: any) => void) => void;
   close: () => void;
+  disconnect: () => void;
   id?: string;
 };
 
@@ -118,11 +119,14 @@ function createUniversalSocket(rawUrl: string): UniversalSocket {
         }, 100);
       }
     },
-    on: (event: string, fn: Function) => {
+    on: (event: string, fn: (data?: any) => void) => {
       if (!listeners[event]) listeners[event] = [];
       listeners[event].push(fn);
     },
     close: () => {
+      ws.close();
+    },
+    disconnect: () => {
       ws.close();
     },
   };
@@ -1103,7 +1107,7 @@ export default function Home() {
     initPeer();
 
     // 4. Socket Matchmaking Events
-    socket.on("match-found", async ({ partnerPeerId, partnerGender, initiator, mode }) => {
+    socket.on("match-found", async ({ partnerPeerId, partnerGender, initiator, mode }: any) => {
       console.log(`Match Found with Peer: ${partnerPeerId}, Initiator: ${initiator}, Mode: ${mode}`);
       currentPartnerPeerIdRef.current = partnerPeerId;
       cleanupCall();
