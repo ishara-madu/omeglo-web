@@ -7,7 +7,10 @@
     "server": "node server.js",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "deploy:matchmaker": "wrangler deploy --config workers/matchmaker/wrangler.toml",
+    "deploy:cron": "wrangler deploy --config workers/cron-cleanup/wrangler.toml",
+    "deploy:pages": "pnpm build && wrangler pages deploy out --project-name omeglo"
   },
   "dependencies": {
     "cors": "^2.8.6",
@@ -30,7 +33,8 @@
     "eslint": "^9",
     "eslint-config-next": "16.3.3",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "wrangler": "^3.114.0"
   },
   "packageManager": "pnpm@11.20.0"
 }

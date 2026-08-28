@@ -1,0 +1,20 @@
+name = "omeglo-backend"
+main = "src/index.js"
+compatibility_date = "2024-04-01"
+account_id = "7fd882c414841bc0dccf9e3355a7a469"
+
+# Cloudflare D1 Database Binding
+[[d1_databases]]
+binding = "DB"
+database_name = "omeglo-db"
+database_id = "d27489c7-8c4f-450e-b319-debfb7573f33"
+
+# Durable Object Binding for Global Real-time Matchmaking Queue
+[durable_objects]
+bindings = [
+  { name = "MATCHMAKER", class_name = "Matchmaker" }
+]
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Matchmaker"]

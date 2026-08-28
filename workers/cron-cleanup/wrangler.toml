@@ -1,6 +1,7 @@
 name = "omeglo-cron-cleanup"
 main = "src/index.js"
 compatibility_date = "2024-04-01"
+account_id = "7fd882c414841bc0dccf9e3355a7a469"
 
 # 1. Automated Cron Trigger Schedule
 # Runs daily at 00:00 UTC (Midnight)
