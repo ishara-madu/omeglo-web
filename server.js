@@ -18,9 +18,9 @@ const io = new Server(server, {
 const PORT = process.env.PORT || 5001;
 
 // Ephemeral Matchmaking State
-// waitingQueue: Array<{ socketId: string, peerId: string, gender: string, lookingFor: string }>
+// waitingQueue: Array<{ socketId: string, peerId: string, gender: string, lookingFor: string, mode: "video" | "text" }>
 const waitingQueue = [];
-// activePairs: Map<socketId, { partnerSocketId: string, partnerPeerId: string }>
+// activePairs: Map<socketId, { partnerSocketId: string, partnerPeerId: string, mode: string }>
 const activePairs = new Map();
 
 // Helper: Remove user from waiting queue
@@ -36,6 +36,9 @@ function findCompatibleMatch(user) {
   for (let i = 0; i < waitingQueue.length; i++) {
     const candidate = waitingQueue[i];
     if (candidate.socketId === user.socketId) continue;
+
+    // Strict Mode Isolation: Video matches Video, Text matches Text
+    if (candidate.mode !== user.mode) continue;
 
     // Check user preference vs candidate gender
     const userLikesCandidate =
@@ -82,10 +85,12 @@ io.on("connection", (socket) => {
   io.emit("online-count", io.engine.clientsCount);
 
   // Event: User clicks 'Start' or 'Next' to find a random match
-  socket.on("find-match", ({ peerId, gender, lookingFor }) => {
+  socket.on("find-match", ({ peerId, gender, lookingFor, mode }) => {
     if (!peerId) {
       return socket.emit("error-msg", "Peer ID is required to match.");
     }
+
+    const chatMode = mode === "text" ? "text" : "video";
 
     // Clean up any existing state for this user
     removeFromQueue(socket.id);
@@ -96,21 +101,24 @@ io.on("connection", (socket) => {
       peerId,
       gender: gender || "male",
       lookingFor: lookingFor || "any",
+      mode: chatMode,
     };
 
     const match = findCompatibleMatch(currentUser);
 
     if (match) {
-      console.log(`[!] Match found: ${socket.id} (Initiator) <-> ${match.socketId}`);
+      console.log(`[!] Match found (${chatMode.toUpperCase()}): ${socket.id} (Initiator) <-> ${match.socketId}`);
 
       // Register active pair
       activePairs.set(socket.id, {
         partnerSocketId: match.socketId,
         partnerPeerId: match.peerId,
+        mode: chatMode,
       });
       activePairs.set(match.socketId, {
         partnerSocketId: socket.id,
         partnerPeerId: peerId,
+        mode: chatMode,
       });
 
       // Emit match found to both peers
@@ -119,18 +127,20 @@ io.on("connection", (socket) => {
         partnerPeerId: match.peerId,
         partnerGender: match.gender,
         initiator: true,
+        mode: chatMode,
       });
 
       io.to(match.socketId).emit("match-found", {
         partnerPeerId: peerId,
         partnerGender: currentUser.gender,
         initiator: false,
+        mode: chatMode,
       });
     } else {
       // Add to waiting queue
       waitingQueue.push(currentUser);
       socket.emit("waiting-in-queue");
-      console.log(`[*] User waiting in queue: ${socket.id} (Queue size: ${waitingQueue.length})`);
+      console.log(`[*] User waiting in [${chatMode}] queue: ${socket.id} (Queue size: ${waitingQueue.length})`);
     }
   });
 

@@ -11,7 +11,6 @@ import {
   Mic,
   MicOff,
   Video,
-  VideoOff,
   Send,
   User,
   Users,
@@ -31,6 +30,12 @@ import {
   Volume2,
   VolumeX,
   SwitchCamera,
+  Signal,
+  SignalMedium,
+  SignalLow,
+  WifiOff,
+  Activity,
+  Sparkles,
 } from "lucide-react";
 
 type ChatMessage = {
@@ -43,6 +48,8 @@ type ChatMessage = {
 type ConnectionStatus = "idle" | "searching" | "connected" | "disconnected";
 type Gender = "male" | "female" | null;
 type MatchPreference = "any" | "female" | "male";
+type NetworkQuality = "good" | "fair" | "poor" | "offline";
+type ChatMode = "video" | "text";
 
 // Synthesize pleasant zero-dependency Web Audio SFX (Match chime, Message bubble pop, Disconnect tone)
 function playAudioSFX(type: "match" | "message" | "leave", isMuted: boolean) {
@@ -198,21 +205,53 @@ const SOCKET_URL =
 
 export default function Home() {
   const [status, setStatus] = useState<ConnectionStatus>("idle");
+  const [chatMode, setChatMode] = useState<ChatMode>("video");
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: "sys-1",
       sender: "system",
-      text: "Welcome to Omeglo! Click 'Start' to begin chatting with random strangers.",
+      text: "Welcome to Omeglo! Choose Video or Text mode and click 'Start' to begin chatting.",
       timestamp: "Just now",
     },
   ]);
   const [inputMessage, setInputMessage] = useState("");
   const [isMicMuted, setIsMicMuted] = useState(false);
-  const [isVideoOff, setIsVideoOff] = useState(false);
+  const isMicMutedRef = useRef(isMicMuted);
   const [isSoundMuted, setIsSoundMuted] = useState(false);
+  const isSoundMutedRef = useRef(isSoundMuted);
   const [isStrangerTyping, setIsStrangerTyping] = useState(false);
   const [onlineCount, setOnlineCount] = useState("1");
   const [strangerGender, setStrangerGender] = useState<Gender>(null);
+
+  // Keep isMicMutedRef and hardware audio tracks always strictly in sync
+  useEffect(() => {
+    isMicMutedRef.current = isMicMuted;
+    if (localStreamRef.current) {
+      localStreamRef.current.getAudioTracks().forEach((track) => {
+        track.enabled = !isMicMuted;
+      });
+    }
+  }, [isMicMuted]);
+
+  // Keep isSoundMutedRef in sync without triggering re-renders
+  useEffect(() => {
+    isSoundMutedRef.current = isSoundMuted;
+  }, [isSoundMuted]);
+
+  const chatModeRef = useRef(chatMode);
+  useEffect(() => {
+    chatModeRef.current = chatMode;
+  }, [chatMode]);
+
+  // Network & Signal Quality Assessment States
+  const [networkQuality, setNetworkQuality] = useState<NetworkQuality>("good");
+  const [networkStats, setNetworkStats] = useState<{ downlink: number; rtt: number; reason?: string }>({
+    downlink: 5,
+    rtt: 50,
+  });
+  const [showWeakSignalModal, setShowWeakSignalModal] = useState(false);
+  const [weakSignalWarning, setWeakSignalWarning] = useState<string | null>(null);
+  const [liveCallQuality, setLiveCallQuality] = useState<"good" | "fair" | "poor">("good");
 
   // Media Streams & Permission State
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
@@ -249,6 +288,7 @@ export default function Home() {
 
   const containerRef = useRef<HTMLDivElement>(null);
   const pipRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const dragStartRef = useRef<{
@@ -270,6 +310,202 @@ export default function Home() {
       },
     ]);
   }, []);
+
+  // Network Quality Assessor (Evaluates downlink, latency, and effective connection speed)
+  const assessNetworkQuality = useCallback(async (): Promise<{
+    quality: NetworkQuality;
+    downlink: number;
+    rtt: number;
+    reason?: string;
+  }> => {
+    if (typeof navigator === "undefined") {
+      return { quality: "good", downlink: 10, rtt: 50 };
+    }
+
+    if (!navigator.onLine) {
+      const res = {
+        quality: "offline" as NetworkQuality,
+        downlink: 0,
+        rtt: 9999,
+        reason: "No internet connection detected (අන්තර්ජාල සම්බන්ධතාවයක් නොමැත).",
+      };
+      setNetworkQuality("offline");
+      setNetworkStats(res);
+      return res;
+    }
+
+    // 1. Check Network Information API (Chrome / Android / Edge)
+    const conn =
+      (navigator as any).connection ||
+      (navigator as any).mozConnection ||
+      (navigator as any).webkitConnection;
+
+    if (conn) {
+      const effectiveType = conn.effectiveType;
+      const downlink = typeof conn.downlink === "number" ? conn.downlink : 5;
+      const rtt = typeof conn.rtt === "number" ? conn.rtt : 60;
+
+      if (effectiveType === "slow-2g" || (downlink < 0.25 && rtt > 1500)) {
+        const res = {
+          quality: "poor" as NetworkQuality,
+          downlink,
+          rtt,
+          reason: "Internet speed is too slow (< 0.25 Mbps) for video streaming. (සිග්නල් ප්‍රමාණවත් නොවේ)",
+        };
+        setNetworkQuality("poor");
+        setNetworkStats(res);
+        return res;
+      }
+
+      if (effectiveType === "2g" || downlink < 0.7 || rtt > 600) {
+        const res = {
+          quality: "fair" as NetworkQuality,
+          downlink,
+          rtt,
+          reason: "Weak connection detected. Minimum speed reached — video quality auto-adjusted.",
+        };
+        setNetworkQuality("fair");
+        setNetworkStats(res);
+        return res;
+      }
+
+      const res = { quality: "good" as NetworkQuality, downlink, rtt };
+      setNetworkQuality("good");
+      setNetworkStats(res);
+      return res;
+    }
+
+    // 2. Fallback latency check probe
+    try {
+      const start = performance.now();
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 2500);
+
+      await fetch("/site.webmanifest?ping=" + Date.now(), {
+        method: "HEAD",
+        signal: controller.signal,
+        cache: "no-store",
+      });
+      clearTimeout(timeoutId);
+      const latency = Math.round(performance.now() - start);
+
+      if (latency > 1800) {
+        const res = {
+          quality: "poor" as NetworkQuality,
+          downlink: 0.2,
+          rtt: latency,
+          reason: "High network latency (> 1800ms). (සිග්නල් දුර්වලයි)",
+        };
+        setNetworkQuality("poor");
+        setNetworkStats(res);
+        return res;
+      }
+
+      if (latency > 600) {
+        const res = {
+          quality: "fair" as NetworkQuality,
+          downlink: 0.6,
+          rtt: latency,
+          reason: "Weak connection detected. Minimum speed reached.",
+        };
+        setNetworkQuality("fair");
+        setNetworkStats(res);
+        return res;
+      }
+
+      const res = { quality: "good" as NetworkQuality, downlink: 5, rtt: latency };
+      setNetworkQuality("good");
+      setNetworkStats(res);
+      return res;
+    } catch (e: any) {
+      if (e?.name === "AbortError") {
+        const res = {
+          quality: "poor" as NetworkQuality,
+          downlink: 0.1,
+          rtt: 3000,
+          reason: "Connection timed out. Signal too weak.",
+        };
+        setNetworkQuality("poor");
+        setNetworkStats(res);
+        return res;
+      }
+      const res = { quality: "fair" as NetworkQuality, downlink: 1, rtt: 300 };
+      setNetworkQuality("fair");
+      setNetworkStats(res);
+      return res;
+    }
+  }, []);
+
+  // Monitor network connection changes in background
+  useEffect(() => {
+    assessNetworkQuality();
+
+    const handleOnline = () => assessNetworkQuality();
+    const handleOffline = () => {
+      setNetworkQuality("offline");
+      setNetworkStats({ downlink: 0, rtt: 9999, reason: "You are offline." });
+    };
+
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+
+    const conn =
+      (navigator as any).connection ||
+      (navigator as any).mozConnection ||
+      (navigator as any).webkitConnection;
+
+    if (conn && conn.addEventListener) {
+      conn.addEventListener("change", handleOnline);
+    }
+
+    const interval = setInterval(assessNetworkQuality, 12000);
+
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+      if (conn && conn.removeEventListener) {
+        conn.removeEventListener("change", handleOnline);
+      }
+      clearInterval(interval);
+    };
+  }, [assessNetworkQuality]);
+
+  // Real-time In-Call WebRTC Connection Quality & Packet Loss Monitoring
+  useEffect(() => {
+    if (status !== "connected" || !activeCallRef.current) return;
+
+    const interval = setInterval(async () => {
+      const pc: RTCPeerConnection = (activeCallRef.current as any)?.peerConnection;
+      if (!pc) return;
+
+      try {
+        const stats = await pc.getStats();
+        let highPacketLoss = false;
+        let highRtt = false;
+
+        stats.forEach((report) => {
+          if (report.type === "inbound-rtp" && report.kind === "video") {
+            const packetsLost = report.packetsLost || 0;
+            const packetsReceived = report.packetsReceived || 1;
+            const lossRate = packetsLost / (packetsLost + packetsReceived);
+            if (lossRate > 0.2) highPacketLoss = true;
+          }
+          if (report.type === "candidate-pair" && report.state === "succeeded") {
+            const rtt = report.currentRoundTripTime || 0;
+            if (rtt > 1.2) highRtt = true;
+          }
+        });
+
+        if (highPacketLoss || highRtt) {
+          setLiveCallQuality("poor");
+        } else {
+          setLiveCallQuality("good");
+        }
+      } catch {}
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, [status]);
 
   // Bind local stream to local video element
   useEffect(() => {
@@ -318,7 +554,7 @@ export default function Home() {
 
         // 2. Regular Text Message
         setIsStrangerTyping(false);
-        playAudioSFX("message", isSoundMuted);
+        playAudioSFX("message", isSoundMutedRef.current);
         setMessages((prev) => [
           ...prev,
           {
@@ -328,6 +564,12 @@ export default function Home() {
             timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
           },
         ]);
+
+        // Auto-scroll whole page down to chat & focus input ONLY when a real message arrives from stranger
+        setTimeout(() => {
+          inputRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+          inputRef.current?.focus();
+        }, 60);
       }
     });
 
@@ -339,9 +581,9 @@ export default function Home() {
     conn.on("error", (err) => {
       console.warn("PeerJS DataConnection error:", err);
     });
-  }, [isSoundMuted]);
+  }, []);
 
-  // Request & Initialize Local Real Camera and Microphone
+  // Request & Initialize Local Real Camera and Microphone (MANDATORY IN VIDEO MODE)
   const initLocalStream = useCallback(async (): Promise<MediaStream | null> => {
     if (localStreamRef.current && localStreamRef.current.active) {
       return localStreamRef.current;
@@ -366,6 +608,10 @@ export default function Home() {
           autoGainControl: true,
         },
       });
+      // Strictly apply current mute preference to newly acquired audio tracks
+      stream.getAudioTracks().forEach((track) => {
+        track.enabled = !isMicMutedRef.current;
+      });
       localStreamRef.current = stream;
       setLocalStream(stream);
       setHasCameraPermission(true);
@@ -383,6 +629,10 @@ export default function Home() {
             noiseSuppression: true,
           },
         });
+        // Strictly apply current mute preference
+        stream.getAudioTracks().forEach((track) => {
+          track.enabled = !isMicMutedRef.current;
+        });
         localStreamRef.current = stream;
         setLocalStream(stream);
         setHasCameraPermission(true);
@@ -391,7 +641,7 @@ export default function Home() {
       } catch (err2) {
         console.warn("Attempt 2 (standard video+audio) failed:", err2);
 
-        // 3. Tertiary Attempt: Video Only (in case no mic exists)
+        // 3. Tertiary Attempt: Video Only
         try {
           const stream = await navigator.mediaDevices.getUserMedia({
             video: { width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 30 } },
@@ -423,6 +673,7 @@ export default function Home() {
       dataConnRef.current = null;
     }
     setIsStrangerTyping(false);
+    setLiveCallQuality("good");
     setRemoteStream(null);
     if (remoteVideoRef.current) {
       remoteVideoRef.current.srcObject = null;
@@ -432,7 +683,7 @@ export default function Home() {
 
   // Initialize Socket.io and PeerJS
   useEffect(() => {
-    // 1. Check localStorage for gender preference
+    // 1. Check localStorage for preferences
     try {
       const savedGender = localStorage.getItem("omeglo_user_gender") as Gender;
       if (savedGender === "male" || savedGender === "female") {
@@ -445,6 +696,11 @@ export default function Home() {
       const savedPref = localStorage.getItem("omeglo_match_pref") as MatchPreference;
       if (savedPref === "any" || savedPref === "female" || savedPref === "male") {
         setMatchPreference(savedPref);
+      }
+
+      const savedMode = localStorage.getItem("omeglo_chat_mode") as ChatMode;
+      if (savedMode === "video" || savedMode === "text") {
+        setChatMode(savedMode);
       }
     } catch {
       setShowGenderModal(true);
@@ -489,7 +745,7 @@ export default function Home() {
         myPeerIdRef.current = id;
       });
 
-      // Handle Incoming Call from Stranger
+      // Handle Incoming Call from Stranger (In Video Mode)
       peer.on("call", async (incomingCall) => {
         const stream = localStreamRef.current || (await initLocalStream());
         if (stream) {
@@ -522,29 +778,32 @@ export default function Home() {
     initPeer();
 
     // 4. Socket Matchmaking Events
-    socket.on("match-found", async ({ partnerPeerId, partnerGender, initiator }) => {
-      console.log("Match Found with Peer:", partnerPeerId, "Initiator:", initiator);
+    socket.on("match-found", async ({ partnerPeerId, partnerGender, initiator, mode }) => {
+      console.log(`Match Found with Peer: ${partnerPeerId}, Initiator: ${initiator}, Mode: ${mode}`);
       cleanupCall();
       setStatus("connected");
       setStrangerGender(partnerGender);
-      playAudioSFX("match", isSoundMuted);
-      addSystemMessage("Connected with a stranger! Say hi.");
+      playAudioSFX("match", isSoundMutedRef.current);
+      addSystemMessage(`Connected with a stranger in ${mode === "text" ? "Text" : "Video"} Chat! Say hi.`);
 
-      // Ensure local camera is streaming
-      const stream = localStreamRef.current || (await initLocalStream());
+      // In Video Mode: Establish WebRTC Video Stream
+      if (mode !== "text") {
+        const stream = localStreamRef.current || (await initLocalStream());
 
-      if (initiator && peerRef.current && partnerPeerId) {
-        // Initiator calls partner
-        if (stream) {
-          const call = peerRef.current.call(partnerPeerId, stream);
-          call?.on("stream", (partnerStream: MediaStream) => {
-            setRemoteStream(partnerStream);
-          });
-          applyLowLatencyNetworkOptimizations(call);
-          activeCallRef.current = call;
+        if (initiator && peerRef.current && partnerPeerId) {
+          if (stream) {
+            const call = peerRef.current.call(partnerPeerId, stream);
+            call?.on("stream", (partnerStream: MediaStream) => {
+              setRemoteStream(partnerStream);
+            });
+            applyLowLatencyNetworkOptimizations(call);
+            activeCallRef.current = call;
+          }
         }
+      }
 
-        // Initiator connects DataChannel for text chat
+      // In Both Modes: Establish P2P DataChannel for Instant Text Chat
+      if (initiator && peerRef.current && partnerPeerId) {
         const conn = peerRef.current.connect(partnerPeerId);
         if (conn) {
           setupDataConnection(conn);
@@ -556,7 +815,7 @@ export default function Home() {
       cleanupCall();
       setStatus("disconnected");
       setAutoNextCountdown(3);
-      playAudioSFX("leave", isSoundMuted);
+      playAudioSFX("leave", isSoundMutedRef.current);
       addSystemMessage("Stranger has disconnected. Finding next stranger in 3s...");
     });
 
@@ -576,14 +835,14 @@ export default function Home() {
         localStreamRef.current.getTracks().forEach((track) => track.stop());
       }
     };
-  }, [addSystemMessage, cleanupCall, initLocalStream, isSoundMuted, setupDataConnection]);
+  }, [addSystemMessage, cleanupCall, initLocalStream, setupDataConnection]);
 
-  // Request Camera automatically after onboarding / on mount
+  // Request Camera automatically in Video mode after onboarding
   useEffect(() => {
-    if (!showGenderModal) {
+    if (!showGenderModal && chatMode === "video") {
       initLocalStream();
     }
-  }, [showGenderModal, initLocalStream]);
+  }, [showGenderModal, chatMode, initLocalStream]);
 
   // Save selected gender & trigger camera access
   const handleSaveGender = (gender: "male" | "female") => {
@@ -592,7 +851,9 @@ export default function Home() {
     } catch {}
     setUserGender(gender);
     setShowGenderModal(false);
-    initLocalStream();
+    if (chatMode === "video") {
+      initLocalStream();
+    }
   };
 
   // Change match preference
@@ -603,9 +864,26 @@ export default function Home() {
     } catch {}
   };
 
-  // Auto-scroll chat
+  // Switch Chat Mode (Video Chat vs Text Only)
+  const handleModeChange = (mode: ChatMode) => {
+    if (status !== "idle") {
+      handleStop();
+    }
+    setChatMode(mode);
+    try {
+      localStorage.setItem("omeglo_chat_mode", mode);
+    } catch {}
+
+    if (mode === "video") {
+      initLocalStream();
+    }
+  };
+
+  // Auto-scroll chat internally (only inside the chat box container, preventing whole-page scrolling)
   useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (messagesContainerRef.current) {
+      messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
+    }
   }, [messages, isStrangerTyping]);
 
   // Handle Dragging Events for Floating Self View (WhatsApp style)
@@ -669,18 +947,34 @@ export default function Home() {
 
   // Get matching text for search
   const getSearchTargetText = () => {
-    if (matchPreference === "female") return "Looking for a female stranger...";
-    if (matchPreference === "male") return "Looking for a male stranger...";
-    return "Looking for a stranger...";
+    const modeText = chatMode === "text" ? "text partner" : "video stranger";
+    if (matchPreference === "female") return `Looking for a female ${modeText}...`;
+    if (matchPreference === "male") return `Looking for a male ${modeText}...`;
+    return `Looking for a random ${modeText}...`;
   };
 
-  // Handle Start Matchmaking (STRICT CAMERA ENFORCEMENT)
+  // Handle Start Matchmaking (MODE-AWARE ENFORCEMENT)
   const handleStart = useCallback(async () => {
-    // 1. Mandatory camera stream check
-    const stream = await initLocalStream();
-    if (!stream || stream.getVideoTracks().length === 0) {
-      setShowPermissionModal(true);
-      return;
+    // 1. Network Signal Pre-flight Check (In Video Mode)
+    if (chatMode === "video") {
+      const net = await assessNetworkQuality();
+      if (net.quality === "poor" || net.quality === "offline") {
+        setShowWeakSignalModal(true);
+        return;
+      }
+
+      if (net.quality === "fair") {
+        setWeakSignalWarning("Weak signal detected. Video optimized to prevent lag.");
+      } else {
+        setWeakSignalWarning(null);
+      }
+
+      // 2. Strict Camera Check in Video Mode
+      const stream = await initLocalStream();
+      if (!stream || stream.getVideoTracks().length === 0) {
+        setShowPermissionModal(true);
+        return;
+      }
     }
 
     if (!myPeerIdRef.current) {
@@ -696,8 +990,9 @@ export default function Home() {
       peerId: myPeerIdRef.current,
       gender: userGender || "male",
       lookingFor: matchPreference,
+      mode: chatMode,
     });
-  }, [addSystemMessage, cleanupCall, initLocalStream, matchPreference, userGender]);
+  }, [addSystemMessage, assessNetworkQuality, chatMode, cleanupCall, initLocalStream, matchPreference, userGender]);
 
   // Handle Stop Matchmaking
   const handleStop = useCallback(() => {
@@ -708,13 +1003,23 @@ export default function Home() {
     setStatus("disconnected");
   }, [cleanupCall, status]);
 
-  // Handle Next (Skip Stranger & Find New Match - STRICT CAMERA ENFORCEMENT)
+  // Handle Next (Skip Stranger & Find New Match)
   const handleNext = useCallback(async () => {
     setAutoNextCountdown(null);
-    const stream = await initLocalStream();
-    if (!stream || stream.getVideoTracks().length === 0) {
-      setShowPermissionModal(true);
-      return;
+
+    // 1. Video Mode Checks
+    if (chatMode === "video") {
+      const net = await assessNetworkQuality();
+      if (net.quality === "poor" || net.quality === "offline") {
+        setShowWeakSignalModal(true);
+        return;
+      }
+
+      const stream = await initLocalStream();
+      if (!stream || stream.getVideoTracks().length === 0) {
+        setShowPermissionModal(true);
+        return;
+      }
     }
 
     cleanupCall();
@@ -726,9 +1031,10 @@ export default function Home() {
         peerId: myPeerIdRef.current,
         gender: userGender || "male",
         lookingFor: matchPreference,
+        mode: chatMode,
       });
     }
-  }, [addSystemMessage, cleanupCall, initLocalStream, matchPreference, userGender]);
+  }, [addSystemMessage, assessNetworkQuality, chatMode, cleanupCall, initLocalStream, matchPreference, userGender]);
 
   // Auto-Next Countdown Effect on Disconnect
   useEffect(() => {
@@ -747,35 +1053,23 @@ export default function Home() {
     return () => clearTimeout(timer);
   }, [status, autoNextCountdown, handleNext]);
 
-  // Handle Mic Mute Toggle
+  // Handle Mic Mute Toggle (Ensures complete hardware sync with state)
   const toggleMic = () => {
-    if (localStreamRef.current) {
-      const audioTrack = localStreamRef.current.getAudioTracks()[0];
-      if (audioTrack) {
-        audioTrack.enabled = isMicMuted;
-        setIsMicMuted(!isMicMuted);
+    setIsMicMuted((prev) => {
+      const nextMuted = !prev;
+      isMicMutedRef.current = nextMuted;
+      if (localStreamRef.current) {
+        localStreamRef.current.getAudioTracks().forEach((track) => {
+          track.enabled = !nextMuted;
+        });
       }
-    } else {
-      setIsMicMuted(!isMicMuted);
-    }
-  };
-
-  // Handle Video Turn On/Off Toggle
-  const toggleVideo = () => {
-    if (localStreamRef.current) {
-      const videoTrack = localStreamRef.current.getVideoTracks()[0];
-      if (videoTrack) {
-        videoTrack.enabled = isVideoOff;
-        setIsVideoOff(!isVideoOff);
-      }
-    } else {
-      setIsVideoOff(!isVideoOff);
-    }
+      return nextMuted;
+    });
   };
 
   // Handle Mobile / Desktop Camera Flip (Switch Front & Back Camera)
   const toggleCameraFacing = async () => {
-    if (isFlippingCamera || isVideoOff) return;
+    if (isFlippingCamera) return;
     setIsFlippingCamera(true);
 
     const nextFacing = facingMode === "user" ? "environment" : "user";
@@ -825,14 +1119,33 @@ export default function Home() {
     }
   };
 
-  // Keyboard Shortcuts (Esc to Stop/Next)
+  // Focus Management: Auto-focus in Text Mode; keep video focused in Video Mode
+  useEffect(() => {
+    if (status === "connected" && chatMode === "text") {
+      const timer = setTimeout(() => {
+        inputRef.current?.focus({ preventScroll: true });
+      }, 150);
+      return () => clearTimeout(timer);
+    } else if (status !== "connected") {
+      inputRef.current?.blur();
+    }
+  }, [status, chatMode]);
+
+  // Keyboard Shortcuts (Esc to Stop/Next, Enter/T to quickly focus chat)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (showGenderModal || showPermissionModal) return;
+      if (showGenderModal || showPermissionModal || showWeakSignalModal) return;
       if (document.activeElement === inputRef.current) {
         if (e.key === "Escape") {
           inputRef.current?.blur();
         }
+        return;
+      }
+
+      // In Video Mode: Pressing Enter or 'T' focuses chat input quickly
+      if (status === "connected" && (e.key === "Enter" || e.key === "t" || e.key === "T")) {
+        e.preventDefault();
+        inputRef.current?.focus();
         return;
       }
 
@@ -847,7 +1160,7 @@ export default function Home() {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [status, handleNext, handleStart, showGenderModal, showPermissionModal]);
+  }, [status, handleNext, handleStart, showGenderModal, showPermissionModal, showWeakSignalModal]);
 
   // Handle Input Change with Real-Time Typing Indicator Transmission
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -911,7 +1224,80 @@ export default function Home() {
 
   return (
     <div className="min-h-screen flex flex-col bg-zinc-50 text-zinc-900 font-sans selection:bg-zinc-900 selection:text-white select-none sm:select-auto">
-      {/* CAMERA & MIC PERMISSION MANDATORY MODAL */}
+      {/* INSUFFICIENT / WEAK NETWORK SIGNAL MODAL */}
+      {showWeakSignalModal && (
+        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl p-6 sm:p-7 max-w-md w-full border border-zinc-200 shadow-2xl flex flex-col items-center text-center relative">
+            {/* Close Button */}
+            <button
+              onClick={() => setShowWeakSignalModal(false)}
+              className="absolute top-4 right-4 p-1.5 rounded-full text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 transition-colors cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            {/* Red Weak Signal Icon */}
+            <div className="w-14 h-14 rounded-2xl bg-red-50 border border-red-200 p-3 flex items-center justify-center mb-3.5 text-red-600 shadow-xs">
+              <WifiOff className="w-7 h-7" />
+            </div>
+
+            <h2 className="text-lg font-bold tracking-tight text-zinc-950 mb-1">
+              Internet Signal Too Weak
+            </h2>
+            <p className="text-xs text-zinc-500 mb-4 leading-relaxed max-w-xs">
+              A minimum stable connection is required for live video chat. Your current speed is too low to maintain video streaming without lag.
+            </p>
+
+            {/* Network Diagnostic Info Box */}
+            <div className="w-full bg-zinc-50 border border-zinc-200/80 rounded-2xl p-3.5 mb-5 text-left text-xs space-y-2">
+              <div className="flex items-center justify-between text-zinc-700 pb-1.5 border-b border-zinc-200/60">
+                <span className="font-medium text-zinc-500">Connection Status:</span>
+                <span className="font-semibold text-red-600 flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-red-500 animate-ping" />
+                  {networkQuality === "offline" ? "Offline" : "Critical (Below 0.25 Mbps)"}
+                </span>
+              </div>
+              <div className="flex items-center justify-between text-zinc-600">
+                <span>Estimated Latency (RTT):</span>
+                <span className="font-mono font-medium">{networkStats.rtt} ms</span>
+              </div>
+              <div className="text-[11px] text-zinc-400 pt-1 leading-normal">
+                💡 <strong>Tip:</strong> Move closer to your Wi-Fi router, turn off downloads, or switch to <strong>Text Only Mode</strong> for zero video requirements.
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex flex-col sm:flex-row items-center gap-2.5 w-full">
+              <button
+                type="button"
+                onClick={async () => {
+                  const net = await assessNetworkQuality();
+                  if (net.quality === "good" || net.quality === "fair") {
+                    setShowWeakSignalModal(false);
+                    handleStart();
+                  }
+                }}
+                className="w-full h-11 rounded-xl bg-zinc-950 hover:bg-zinc-800 active:scale-[0.98] text-white text-xs font-semibold transition-all shadow-xs cursor-pointer flex items-center justify-center gap-2"
+              >
+                <Activity className="w-3.5 h-3.5" />
+                <span>Test Signal & Retry</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowWeakSignalModal(false);
+                  handleModeChange("text");
+                }}
+                className="w-full sm:w-auto h-11 px-4 rounded-xl bg-zinc-100 hover:bg-zinc-200 text-zinc-800 text-xs font-medium transition-colors cursor-pointer"
+              >
+                Switch to Text Mode
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* CAMERA & MIC PERMISSION MANDATORY MODAL (VIDEO MODE ONLY) */}
       {showPermissionModal && (
         <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200">
           <div className="bg-white rounded-3xl p-6 sm:p-7 max-w-md w-full border border-zinc-200 shadow-2xl flex flex-col items-center text-center relative">
@@ -932,7 +1318,7 @@ export default function Home() {
               Camera & Microphone Access Required
             </h2>
             <p className="text-xs text-zinc-500 mb-5 leading-relaxed">
-              Omeglo is a live random video chat. You must enable your camera and microphone to start chatting with strangers.
+              Omeglo Video Chat is a genuine face-to-face platform. You must enable your camera and microphone to start video chatting.
             </p>
 
             {/* macOS & Browser Troubleshooting Guide Box */}
@@ -951,7 +1337,7 @@ export default function Home() {
               </div>
               <div className="flex items-start gap-2 text-zinc-500 text-[11px]">
                 <Info className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-                <span>Make sure your MacBook lid is open and FaceTime camera is not in use by another app.</span>
+                <span>No camera? Switch to <strong>Text Only Mode</strong> for text chat without camera permissions.</span>
               </div>
             </div>
 
@@ -969,14 +1355,17 @@ export default function Home() {
                 className="w-full h-11 rounded-xl bg-zinc-950 hover:bg-zinc-800 active:scale-[0.98] text-white text-xs font-semibold transition-all shadow-xs cursor-pointer flex items-center justify-center gap-2"
               >
                 <Camera className="w-3.5 h-3.5" />
-                <span>Grant Access & Start Chat</span>
+                <span>Grant Access & Start Video</span>
               </button>
               <button
                 type="button"
-                onClick={() => setShowPermissionModal(false)}
-                className="w-full sm:w-auto h-11 px-5 rounded-xl border border-zinc-200 hover:bg-zinc-100 text-zinc-600 text-xs font-medium transition-colors cursor-pointer"
+                onClick={() => {
+                  setShowPermissionModal(false);
+                  handleModeChange("text");
+                }}
+                className="w-full sm:w-auto h-11 px-4 rounded-xl bg-zinc-100 hover:bg-zinc-200 text-zinc-800 text-xs font-medium transition-colors cursor-pointer"
               >
-                Cancel
+                Use Text Mode
               </button>
             </div>
           </div>
@@ -1003,7 +1392,7 @@ export default function Home() {
               <OmegloWordmark size="text-[22px]" />
             </h2>
             <p className="text-xs text-zinc-500 mb-6 max-w-[250px] leading-relaxed">
-              Select your gender to personalize your random video chat experience. Saved in your browser.
+              Select your gender to personalize your random chat experience. Saved in your browser.
             </p>
 
             {/* Custom SVG Gender Option Cards */}
@@ -1083,7 +1472,7 @@ export default function Home() {
 
       {/* Top Header */}
       <header className="w-full bg-white/95 backdrop-blur-md border-b border-zinc-200/70 sticky top-0 z-30">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-15 flex items-center justify-between">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-15 flex items-center justify-between gap-2">
           {/* Brand Logo & Multicolor Wordmark */}
           <div className="flex items-center gap-2.5">
             {/* Minimalist Logo Icon */}
@@ -1104,13 +1493,72 @@ export default function Home() {
                 <OmegloWordmark size="text-[19px]" />
               </div>
               <span className="text-[10px] text-zinc-400 font-medium tracking-wide leading-none mt-0.5">
-                Random Video Chat
+                {chatMode === "video" ? "Random Video Chat" : "Random Text Chat"}
               </span>
             </div>
           </div>
 
+          {/* Central Segmented Chat Mode Switcher (Video vs Text) */}
+          <div className="flex items-center bg-zinc-100/90 p-1 rounded-xl border border-zinc-200/60 shadow-2xs">
+            <button
+              type="button"
+              onClick={() => handleModeChange("video")}
+              className={`h-8 px-3 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all duration-150 cursor-pointer ${
+                chatMode === "video"
+                  ? "bg-white text-zinc-950 shadow-2xs font-semibold ring-1 ring-zinc-200/80"
+                  : "text-zinc-500 hover:text-zinc-900 hover:bg-white/50"
+              }`}
+            >
+              <Video className="w-3.5 h-3.5" />
+              <span>Video Chat</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleModeChange("text")}
+              className={`h-8 px-3 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all duration-150 cursor-pointer ${
+                chatMode === "text"
+                  ? "bg-white text-zinc-950 shadow-2xs font-semibold ring-1 ring-zinc-200/80"
+                  : "text-zinc-500 hover:text-zinc-900 hover:bg-white/50"
+              }`}
+            >
+              <MessageSquare className="w-3.5 h-3.5" />
+              <span>Text Only</span>
+            </button>
+          </div>
+
           {/* User Gender Tag & Live Online Badges */}
           <div className="flex items-center gap-2.5 sm:gap-4 text-xs">
+            {/* Real-time Network Signal Health Indicator */}
+            {chatMode === "video" && (
+              <div
+                title={`Network Signal: ${
+                  networkQuality === "good"
+                    ? "Strong (Smooth HD)"
+                    : networkQuality === "fair"
+                    ? "Fair (Low Bandwidth - optimized)"
+                    : "Critical / Weak Signal"
+                }`}
+                className={`flex items-center gap-1.5 px-2 py-1 rounded-full border transition-colors ${
+                  networkQuality === "good"
+                    ? "bg-emerald-50/80 border-emerald-200/60 text-emerald-700"
+                    : networkQuality === "fair"
+                    ? "bg-amber-50/80 border-amber-200/60 text-amber-700"
+                    : "bg-red-50/80 border-red-200/60 text-red-700 animate-pulse"
+                }`}
+              >
+                {networkQuality === "good" ? (
+                  <Signal className="w-3.5 h-3.5" />
+                ) : networkQuality === "fair" ? (
+                  <SignalMedium className="w-3.5 h-3.5" />
+                ) : (
+                  <SignalLow className="w-3.5 h-3.5" />
+                )}
+                <span className="text-[10px] font-semibold hidden md:inline capitalize">
+                  {networkQuality === "good" ? "Fast Signal" : networkQuality === "fair" ? "Low Signal" : "No Signal"}
+                </span>
+              </div>
+            )}
+
             {/* Clickable User Gender SVG Badge */}
             {userGender && (
               <button
@@ -1156,22 +1604,24 @@ export default function Home() {
 
       {/* Main Content Area */}
       <main className="flex-1 max-w-7xl w-full mx-auto p-3 sm:p-5 lg:p-6 flex flex-col lg:grid lg:grid-cols-12 gap-4 lg:gap-6">
-        {/* Left Section: Main Video Stage + Sleek Dock (8 Cols on Desktop) */}
+        {/* Left Section: Main Stage + Sleek Dock (8 Cols on Desktop) */}
         <section className="lg:col-span-8 flex flex-col gap-3 sm:gap-4">
-          {/* Main Video Stage with Analog Scanlines & WhatsApp PiP */}
+          {/* Main Visual Stage (Video Feed in Video Mode, Interactive Dashboard in Text Mode) */}
           <div
             ref={containerRef}
             className="relative w-full aspect-4/3 sm:aspect-16/10 lg:aspect-auto flex-1 min-h-[380px] sm:min-h-[480px] lg:min-h-[540px] bg-zinc-950 rounded-2xl overflow-hidden border border-zinc-800/80 shadow-xs flex flex-col items-center justify-center text-zinc-400"
           >
-            {/* Stranger Live WebRTC Video Element */}
-            <video
-              ref={remoteVideoRef}
-              autoPlay
-              playsInline
-              className={`absolute inset-0 w-full h-full object-cover z-0 transition-opacity duration-300 ${
-                status === "connected" && remoteStream ? "opacity-100 block" : "opacity-0 hidden"
-              }`}
-            />
+            {/* VIDEO MODE: Stranger Live WebRTC Video Element */}
+            {chatMode === "video" && (
+              <video
+                ref={remoteVideoRef}
+                autoPlay
+                playsInline
+                className={`absolute inset-0 w-full h-full object-cover z-0 transition-opacity duration-300 ${
+                  status === "connected" && remoteStream ? "opacity-100 block" : "opacity-0 hidden"
+                }`}
+              />
+            )}
 
             {/* Stranger Badge (Top Left) */}
             <div className="absolute top-4 left-4 z-10 flex items-center gap-2 bg-black/60 backdrop-blur-md px-3 py-1 rounded-full border border-white/10 text-white text-xs font-medium pointer-events-none">
@@ -1187,15 +1637,27 @@ export default function Home() {
               <span className="text-[11px] font-medium tracking-tight">
                 {status === "connected" && strangerGender
                   ? `Stranger (${strangerGender === "female" ? "♀ Female" : "♂ Male"})`
-                  : "Stranger"}
+                  : `Stranger (${chatMode === "text" ? "Text Mode" : "Video Mode"})`}
               </span>
             </div>
 
             {/* Quality / Status Badge (Top Right) */}
             {status === "connected" && (
               <div className="absolute top-4 right-4 z-10 bg-black/60 backdrop-blur-md text-[11px] text-zinc-300 px-2.5 py-1 rounded-full border border-white/10 flex items-center gap-1.5 pointer-events-none">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                Live P2P
+                <span className={`w-1.5 h-1.5 rounded-full ${liveCallQuality === "good" ? "bg-emerald-400" : "bg-amber-400 animate-pulse"}`} />
+                <span>{chatMode === "text" ? "P2P Text Active" : liveCallQuality === "good" ? "Live HD Video" : "Weak P2P Link"}</span>
+              </div>
+            )}
+
+            {/* WEAK SIGNAL WARNING BANNER OVER VIDEO */}
+            {chatMode === "video" && (weakSignalWarning || (status === "connected" && liveCallQuality === "poor")) && (
+              <div className="absolute top-14 left-1/2 -translate-x-1/2 z-20 bg-amber-500/90 backdrop-blur-md text-zinc-950 font-semibold text-[11px] px-3.5 py-1 rounded-full border border-amber-300/60 shadow-lg flex items-center gap-1.5 animate-in fade-in slide-in-from-top-1">
+                <AlertTriangle className="w-3.5 h-3.5 text-zinc-950 shrink-0" />
+                <span>
+                  {liveCallQuality === "poor"
+                    ? "Network lagging: Motion prioritized over resolution"
+                    : "Low signal: Video optimized for weak connection"}
+                </span>
               </div>
             )}
 
@@ -1215,30 +1677,62 @@ export default function Home() {
                   </div>
                   <div className="space-y-0.5">
                     <p className="text-zinc-100 font-medium text-sm">
-                      Connecting to matchmaking...
+                      {chatMode === "text" ? "Finding random text partner..." : "Connecting to video match..."}
                     </p>
                     <p className="text-zinc-400 text-xs font-mono">
                       {matchPreference === "female"
                         ? "Looking for female match"
                         : matchPreference === "male"
                         ? "Looking for male match"
-                        : "Looking for stranger"}
+                        : "Looking for anyone"}
                     </p>
                   </div>
                 </div>
               </div>
             )}
 
-            {/* IDLE STATE */}
-            {status === "idle" && (
-              <div className="flex flex-col items-center gap-3 p-6 text-center select-none pointer-events-none z-0">
-                <div className="w-16 h-16 rounded-2xl bg-zinc-900/90 border border-zinc-800 flex items-center justify-center text-zinc-500">
-                  <User className="w-8 h-8 stroke-[1.5]" />
+            {/* TEXT MODE CONNECTED STAGE: Sleek Visualizer & Identity Card */}
+            {chatMode === "text" && status === "connected" && (
+              <div className="flex flex-col items-center gap-4 p-6 text-center select-none z-10 animate-in fade-in">
+                <div className="relative">
+                  <div className="w-24 h-24 rounded-3xl bg-zinc-900 border border-zinc-700 p-4 flex items-center justify-center shadow-xl">
+                    <Image
+                      src={strangerGender === "female" ? "/female.svg" : "/male.svg"}
+                      alt="Stranger Avatar"
+                      width={64}
+                      height={64}
+                      className="w-full h-full object-contain"
+                    />
+                  </div>
+                  <span className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-emerald-500 border-2 border-zinc-950 flex items-center justify-center shadow-xs text-white">
+                    <Sparkles className="w-3 h-3" />
+                  </span>
                 </div>
                 <div className="space-y-1">
-                  <p className="text-zinc-200 font-medium text-sm">Ready to chat</p>
+                  <p className="text-zinc-100 font-bold text-base tracking-tight">
+                    Chatting with {strangerGender ? (strangerGender === "female" ? "Female Stranger" : "Male Stranger") : "Stranger"}
+                  </p>
+                  <p className="text-zinc-400 text-xs max-w-xs">
+                    You are connected via P2P Encrypted Text. Type in the chat box on the right to talk!
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* IDLE STATE */}
+            {status === "idle" && (
+              <div className="flex flex-col items-center gap-3.5 p-6 text-center select-none pointer-events-none z-0">
+                <div className="w-16 h-16 rounded-2xl bg-zinc-900/90 border border-zinc-800 flex items-center justify-center text-zinc-500 shadow-inner">
+                  {chatMode === "text" ? <MessageSquare className="w-8 h-8 stroke-[1.5]" /> : <User className="w-8 h-8 stroke-[1.5]" />}
+                </div>
+                <div className="space-y-1">
+                  <p className="text-zinc-200 font-semibold text-sm">
+                    {chatMode === "text" ? "Ready for Random Text Chat" : "Ready for Video Chat"}
+                  </p>
                   <p className="text-zinc-500 text-xs max-w-xs">
-                    Press Start below to connect with a random stranger.
+                    {chatMode === "text"
+                      ? "Zero camera needed. Click Start to match with text chatters."
+                      : "Face-to-face video chat. Click Start to connect with strangers."}
                   </p>
                 </div>
               </div>
@@ -1283,73 +1777,73 @@ export default function Home() {
               </div>
             )}
 
-            {/* WhatsApp-Style Floating Draggable 'You' Camera Preview */}
-            <div
-              ref={pipRef}
-              style={
-                pipPos
-                  ? {
-                      left: `${pipPos.x}px`,
-                      top: `${pipPos.y}px`,
-                      right: "auto",
-                      bottom: "auto",
-                    }
-                  : undefined
-              }
-              onMouseDown={(e) => {
-                if ((e.target as HTMLElement).closest("button")) return;
-                startDrag(e.clientX, e.clientY);
-              }}
-              onTouchStart={(e) => {
-                if ((e.target as HTMLElement).closest("button")) return;
-                startDrag(e.touches[0].clientX, e.touches[0].clientY);
-              }}
-              className={`absolute ${
-                !pipPos ? "bottom-4 right-4" : ""
-              } z-20 w-32 h-44 sm:w-38 sm:h-50 bg-zinc-950 border border-white/20 rounded-2xl shadow-2xl overflow-hidden backdrop-blur-md flex flex-col justify-between p-2.5 transition-shadow ${
-                isDragging ? "cursor-grabbing ring-2 ring-zinc-400/40" : "cursor-grab hover:border-white/40"
-              }`}
-            >
-              {/* Local Webcam Video Stream (Mirrored on user facing, z-0) */}
-              <video
-                ref={localVideoRef}
-                autoPlay
-                playsInline
-                muted
-                className={`absolute inset-0 w-full h-full object-cover z-0 ${
-                  facingMode === "user" ? "scale-x-[-1]" : ""
-                } pointer-events-none transition-opacity duration-200 ${
-                  isVideoOff || !localStream || hasCameraPermission === false ? "opacity-0" : "opacity-100"
+            {/* VIDEO MODE: WhatsApp-Style Floating Draggable 'You' Camera Preview */}
+            {chatMode === "video" && (
+              <div
+                ref={pipRef}
+                style={
+                  pipPos
+                    ? {
+                        left: `${pipPos.x}px`,
+                        top: `${pipPos.y}px`,
+                        right: "auto",
+                        bottom: "auto",
+                      }
+                    : undefined
+                }
+                onMouseDown={(e) => {
+                  if ((e.target as HTMLElement).closest("button")) return;
+                  startDrag(e.clientX, e.clientY);
+                }}
+                onTouchStart={(e) => {
+                  if ((e.target as HTMLElement).closest("button")) return;
+                  startDrag(e.touches[0].clientX, e.touches[0].clientY);
+                }}
+                className={`absolute ${
+                  !pipPos ? "bottom-4 right-4" : ""
+                } z-20 w-32 h-44 sm:w-38 sm:h-50 bg-zinc-950 border border-white/20 rounded-2xl shadow-2xl overflow-hidden backdrop-blur-md flex flex-col justify-between p-2.5 transition-shadow ${
+                  isDragging ? "cursor-grabbing ring-2 ring-zinc-400/40" : "cursor-grab hover:border-white/40"
                 }`}
-              />
+              >
+                {/* Local Webcam Video Stream (Mirrored on user facing, z-0) */}
+                <video
+                  ref={localVideoRef}
+                  autoPlay
+                  playsInline
+                  muted
+                  className={`absolute inset-0 w-full h-full object-cover z-0 ${
+                    facingMode === "user" ? "scale-x-[-1]" : ""
+                  } pointer-events-none transition-opacity duration-200 ${
+                    !localStream || hasCameraPermission === false ? "opacity-0" : "opacity-100"
+                  }`}
+                />
 
-              {/* Drag Handle & Label (z-10 above video) */}
-              <div className="relative z-10 flex items-center justify-between w-full">
-                <div className="flex items-center gap-1.5 bg-black/60 backdrop-blur-md px-2 py-0.5 rounded-full border border-white/10 text-white text-[10px] font-medium">
-                  {userGender ? (
-                    <div className="w-3 h-3 rounded-full overflow-hidden flex items-center justify-center">
-                      <Image
-                        src={userGender === "male" ? "/male.svg" : "/female.svg"}
-                        alt={userGender}
-                        width={12}
-                        height={12}
-                        className="w-full h-full object-contain"
-                      />
-                    </div>
-                  ) : (
-                    <span className="w-1.5 h-1.5 rounded-full bg-zinc-300" />
-                  )}
-                  <span>You</span>
+                {/* Drag Handle & Label (z-10 above video) */}
+                <div className="relative z-10 flex items-center justify-between w-full">
+                  <div className="flex items-center gap-1.5 bg-black/60 backdrop-blur-md px-2 py-0.5 rounded-full border border-white/10 text-white text-[10px] font-medium">
+                    {userGender ? (
+                      <div className="w-3 h-3 rounded-full overflow-hidden flex items-center justify-center">
+                        <Image
+                          src={userGender === "male" ? "/male.svg" : "/female.svg"}
+                          alt={userGender}
+                          width={12}
+                          height={12}
+                          className="w-full h-full object-contain"
+                        />
+                      </div>
+                    ) : (
+                      <span className="w-1.5 h-1.5 rounded-full bg-zinc-300" />
+                    )}
+                    <span>You</span>
+                  </div>
+                  <div className="text-zinc-400 hover:text-white transition-colors p-0.5">
+                    <GripHorizontal className="w-3.5 h-3.5" />
+                  </div>
                 </div>
-                <div className="text-zinc-400 hover:text-white transition-colors p-0.5">
-                  <GripHorizontal className="w-3.5 h-3.5" />
-                </div>
-              </div>
 
-              {/* Fallback View if Video is Off or Permission Pending */}
-              {(isVideoOff || !localStream || hasCameraPermission === false) && (
-                <div className="relative z-10 flex-1 flex flex-col items-center justify-center my-1 pointer-events-none">
-                  {hasCameraPermission === false ? (
+                {/* Fallback View if Permission Pending */}
+                {(!localStream || hasCameraPermission === false) && (
+                  <div className="relative z-10 flex-1 flex flex-col items-center justify-center my-1 pointer-events-none">
                     <button
                       type="button"
                       onClick={() => setShowPermissionModal(true)}
@@ -1358,89 +1852,52 @@ export default function Home() {
                       <AlertTriangle className="w-5 h-5 text-amber-400" />
                       <span className="text-[9px] font-medium text-amber-200">Enable Cam</span>
                     </button>
-                  ) : (
-                    <div className="flex flex-col items-center gap-1.5">
-                      <div className="w-10 h-10 rounded-2xl bg-zinc-800/80 border border-zinc-700/80 p-1.5 flex items-center justify-center shadow-inner">
-                        {userGender ? (
-                          <Image
-                            src={userGender === "male" ? "/male.svg" : "/female.svg"}
-                            alt="Self Avatar"
-                            width={40}
-                            height={40}
-                            className="w-full h-full object-contain"
-                          />
-                        ) : (
-                          <User className="w-5 h-5 stroke-[1.5] text-zinc-400" />
-                        )}
-                      </div>
-                      <span className="text-[10px] text-zinc-400 font-medium">
-                        {isVideoOff ? "Camera Off" : "Your Camera"}
-                      </span>
-                    </div>
-                  )}
+                  </div>
+                )}
+
+                {/* Spacer when video is live */}
+                {localStream && hasCameraPermission !== false && (
+                  <div className="flex-1 pointer-events-none" />
+                )}
+
+                {/* In-PiP Media Controls (Flip Camera & Mic Mute - Camera is STRICTLY Active) */}
+                <div className="relative z-10 flex items-center justify-center gap-1 bg-black/60 backdrop-blur-md py-1 px-1.5 rounded-xl border border-white/10">
+                  {/* Flip Camera Button */}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleCameraFacing();
+                    }}
+                    disabled={isFlippingCamera || !localStream}
+                    title={`Flip Camera (Currently: ${facingMode === "user" ? "Front" : "Back"})`}
+                    className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                      isFlippingCamera
+                        ? "text-indigo-400 animate-spin"
+                        : "text-zinc-300 hover:bg-white/10 hover:text-white"
+                    }`}
+                  >
+                    <SwitchCamera className="w-3.5 h-3.5" />
+                  </button>
+                  {/* Mute Mic Button */}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleMic();
+                    }}
+                    title={isMicMuted ? "Unmute Mic" : "Mute Mic"}
+                    className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                      isMicMuted
+                        ? "bg-red-500/20 text-red-400"
+                        : "text-zinc-300 hover:bg-white/10 hover:text-white"
+                    }`}
+                  >
+                    {isMicMuted ? <MicOff className="w-3.5 h-3.5" /> : <Mic className="w-3.5 h-3.5" />}
+                  </button>
                 </div>
-              )}
-
-              {/* Spacer when video is live */}
-              {!isVideoOff && localStream && hasCameraPermission !== false && (
-                <div className="flex-1 pointer-events-none" />
-              )}
-
-              {/* In-PiP Media Controls (z-10 above video) */}
-              <div className="relative z-10 flex items-center justify-center gap-1 bg-black/60 backdrop-blur-md py-1 px-1.5 rounded-xl border border-white/10">
-                {/* Flip Camera Button */}
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    toggleCameraFacing();
-                  }}
-                  disabled={isFlippingCamera || isVideoOff || !localStream}
-                  title={`Flip Camera (Currently: ${facingMode === "user" ? "Front" : "Back"})`}
-                  className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
-                    isFlippingCamera
-                      ? "text-indigo-400 animate-spin"
-                      : "text-zinc-300 hover:bg-white/10 hover:text-white"
-                  }`}
-                >
-                  <SwitchCamera className="w-3.5 h-3.5" />
-                </button>
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    toggleMic();
-                  }}
-                  title={isMicMuted ? "Unmute Mic" : "Mute Mic"}
-                  className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
-                    isMicMuted
-                      ? "bg-red-500/20 text-red-400"
-                      : "text-zinc-300 hover:bg-white/10 hover:text-white"
-                  }`}
-                >
-                  {isMicMuted ? <MicOff className="w-3.5 h-3.5" /> : <Mic className="w-3.5 h-3.5" />}
-                </button>
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (!localStream) {
-                      initLocalStream();
-                    } else {
-                      toggleVideo();
-                    }
-                  }}
-                  title={isVideoOff ? "Turn Cam On" : "Turn Cam Off"}
-                  className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
-                    isVideoOff
-                      ? "bg-red-500/20 text-red-400"
-                      : "text-zinc-300 hover:bg-white/10 hover:text-white"
-                  }`}
-                >
-                  {isVideoOff ? <VideoOff className="w-3.5 h-3.5" /> : <Video className="w-3.5 h-3.5" />}
-                </button>
               </div>
-            </div>
+            )}
           </div>
 
           {/* ULTRA-SLEEK MINIMALIST CONTROL DOCK */}
@@ -1454,7 +1911,7 @@ export default function Home() {
                   className="w-full sm:w-auto h-11 px-6 rounded-xl bg-zinc-950 hover:bg-zinc-800 active:scale-[0.98] text-white text-sm font-medium transition-all duration-150 flex items-center justify-center gap-2.5 shadow-xs cursor-pointer"
                 >
                   <Play className="w-4 h-4 fill-current" />
-                  <span>Start Chat</span>
+                  <span>Start {chatMode === "text" ? "Text Chat" : "Video Chat"}</span>
                   <span className="hidden sm:inline-flex text-[10px] font-mono opacity-50 bg-white/15 px-1.5 py-0.5 rounded ml-1">
                     Space
                   </span>
@@ -1589,7 +2046,9 @@ export default function Home() {
                 <MessageSquare className="w-3.5 h-3.5" />
               </div>
               <div>
-                <h2 className="text-xs font-semibold text-zinc-950 leading-none">P2P Text Chat</h2>
+                <h2 className="text-xs font-semibold text-zinc-950 leading-none">
+                  {chatMode === "text" ? "P2P Text Chat" : "Live Video Chat"}
+                </h2>
                 <span className="text-[10px] text-zinc-400 font-medium">
                   {status === "connected"
                     ? "Direct Encrypted Connection"
@@ -1625,7 +2084,10 @@ export default function Home() {
           </div>
 
           {/* Chat Messages List */}
-          <div className="flex-1 p-3.5 overflow-y-auto space-y-2.5 custom-scrollbar bg-zinc-50/30">
+          <div
+            ref={messagesContainerRef}
+            className="flex-1 p-3.5 overflow-y-auto space-y-2.5 custom-scrollbar bg-zinc-50/30"
+          >
             {messages.map((msg) => {
               if (msg.sender === "system") {
                 return (
