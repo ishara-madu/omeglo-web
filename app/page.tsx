@@ -37,7 +37,7 @@ type MatchPreference = "any" | "female" | "male";
 // Eye-friendly Multicolor Omeglo Brand Wordmark
 function OmegloWordmark({ size = "text-[19px]" }: { size?: string }) {
   return (
-    <span className={`font-black tracking-tight select-none inline-flex items-center ${size}`}>
+    <span className={`font-bold tracking-[0.01em] select-none inline-flex items-center font-sans antialiased ${size}`}>
       <span className="text-[#2563eb]">O</span>
       <span className="text-[#f43f5e]">m</span>
       <span className="text-[#f59e0b]">e</span>
@@ -154,7 +154,7 @@ export default function Home() {
   const handleSaveGender = (gender: "male" | "female") => {
     try {
       localStorage.setItem("omeglo_user_gender", gender);
-    } catch {}
+    } catch { }
     setUserGender(gender);
     setShowGenderModal(false);
   };
@@ -164,7 +164,7 @@ export default function Home() {
     setMatchPreference(pref);
     try {
       localStorage.setItem("omeglo_match_pref", pref);
-    } catch {}
+    } catch { }
   };
 
   // Auto-scroll chat
@@ -411,11 +411,10 @@ export default function Home() {
               <button
                 type="button"
                 onClick={() => setTempSelectedGender("male")}
-                className={`group relative p-4 rounded-2xl border flex flex-col items-center gap-3 transition-all duration-150 cursor-pointer ${
-                  tempSelectedGender === "male"
-                    ? "border-zinc-950 bg-zinc-50/80 ring-2 ring-zinc-950 shadow-xs"
-                    : "border-zinc-200 hover:border-zinc-300 hover:bg-zinc-50/50"
-                }`}
+                className={`group relative p-4 rounded-2xl border flex flex-col items-center gap-3 transition-all duration-150 cursor-pointer ${tempSelectedGender === "male"
+                  ? "border-zinc-950 bg-zinc-50/80 ring-2 ring-zinc-950 shadow-xs"
+                  : "border-zinc-200 hover:border-zinc-300 hover:bg-zinc-50/50"
+                  }`}
               >
                 {tempSelectedGender === "male" && (
                   <div className="absolute top-2.5 right-2.5 w-5 h-5 rounded-full bg-zinc-950 text-white flex items-center justify-center shadow-xs">
@@ -441,11 +440,10 @@ export default function Home() {
               <button
                 type="button"
                 onClick={() => setTempSelectedGender("female")}
-                className={`group relative p-4 rounded-2xl border flex flex-col items-center gap-3 transition-all duration-150 cursor-pointer ${
-                  tempSelectedGender === "female"
-                    ? "border-zinc-950 bg-zinc-50/80 ring-2 ring-zinc-950 shadow-xs"
-                    : "border-zinc-200 hover:border-zinc-300 hover:bg-zinc-50/50"
-                }`}
+                className={`group relative p-4 rounded-2xl border flex flex-col items-center gap-3 transition-all duration-150 cursor-pointer ${tempSelectedGender === "female"
+                  ? "border-zinc-950 bg-zinc-50/80 ring-2 ring-zinc-950 shadow-xs"
+                  : "border-zinc-200 hover:border-zinc-300 hover:bg-zinc-50/50"
+                  }`}
               >
                 {tempSelectedGender === "female" && (
                   <div className="absolute top-2.5 right-2.5 w-5 h-5 rounded-full bg-zinc-950 text-white flex items-center justify-center shadow-xs">
@@ -565,13 +563,12 @@ export default function Home() {
             {/* Stranger Badge (Top Left) */}
             <div className="absolute top-4 left-4 z-10 flex items-center gap-2 bg-black/60 backdrop-blur-md px-3 py-1 rounded-full border border-white/10 text-white text-xs font-medium pointer-events-none">
               <span
-                className={`w-2 h-2 rounded-full transition-colors duration-300 ${
-                  status === "connected"
-                    ? "bg-emerald-500"
-                    : status === "searching"
+                className={`w-2 h-2 rounded-full transition-colors duration-300 ${status === "connected"
+                  ? "bg-emerald-500"
+                  : status === "searching"
                     ? "bg-amber-400 animate-pulse"
                     : "bg-zinc-600"
-                }`}
+                  }`}
               />
               <span className="text-[11px] font-medium tracking-tight">Stranger</span>
             </div>
@@ -606,8 +603,8 @@ export default function Home() {
                       {matchPreference === "female"
                         ? "Looking for female match"
                         : matchPreference === "male"
-                        ? "Looking for male match"
-                        : "Looking for stranger"}
+                          ? "Looking for male match"
+                          : "Looking for stranger"}
                     </p>
                   </div>
                 </div>
@@ -659,11 +656,11 @@ export default function Home() {
               style={
                 pipPos
                   ? {
-                      left: `${pipPos.x}px`,
-                      top: `${pipPos.y}px`,
-                      right: "auto",
-                      bottom: "auto",
-                    }
+                    left: `${pipPos.x}px`,
+                    top: `${pipPos.y}px`,
+                    right: "auto",
+                    bottom: "auto",
+                  }
                   : undefined
               }
               onMouseDown={(e) => {
@@ -674,11 +671,9 @@ export default function Home() {
                 if ((e.target as HTMLElement).closest("button")) return;
                 startDrag(e.touches[0].clientX, e.touches[0].clientY);
               }}
-              className={`absolute ${
-                !pipPos ? "bottom-4 right-4" : ""
-              } z-20 w-32 h-44 sm:w-38 sm:h-50 bg-zinc-900/95 border border-white/20 rounded-2xl shadow-2xl overflow-hidden backdrop-blur-md flex flex-col justify-between p-2.5 transition-shadow ${
-                isDragging ? "cursor-grabbing ring-2 ring-zinc-400/40" : "cursor-grab hover:border-white/40"
-              }`}
+              className={`absolute ${!pipPos ? "bottom-4 right-4" : ""
+                } z-20 w-32 h-44 sm:w-38 sm:h-50 bg-zinc-900/95 border border-white/20 rounded-2xl shadow-2xl overflow-hidden backdrop-blur-md flex flex-col justify-between p-2.5 transition-shadow ${isDragging ? "cursor-grabbing ring-2 ring-zinc-400/40" : "cursor-grab hover:border-white/40"
+                }`}
             >
               {/* Drag Handle & Label */}
               <div className="flex items-center justify-between w-full">
@@ -739,11 +734,10 @@ export default function Home() {
                     setIsMicMuted(!isMicMuted);
                   }}
                   title={isMicMuted ? "Unmute Mic" : "Mute Mic"}
-                  className={`p-1.5 rounded-lg transition-colors ${
-                    isMicMuted
-                      ? "bg-red-500/20 text-red-400"
-                      : "text-zinc-300 hover:bg-white/10 hover:text-white"
-                  }`}
+                  className={`p-1.5 rounded-lg transition-colors ${isMicMuted
+                    ? "bg-red-500/20 text-red-400"
+                    : "text-zinc-300 hover:bg-white/10 hover:text-white"
+                    }`}
                 >
                   {isMicMuted ? <MicOff className="w-3.5 h-3.5" /> : <Mic className="w-3.5 h-3.5" />}
                 </button>
@@ -754,11 +748,10 @@ export default function Home() {
                     setIsVideoOff(!isVideoOff);
                   }}
                   title={isVideoOff ? "Turn Cam On" : "Turn Cam Off"}
-                  className={`p-1.5 rounded-lg transition-colors ${
-                    isVideoOff
-                      ? "bg-red-500/20 text-red-400"
-                      : "text-zinc-300 hover:bg-white/10 hover:text-white"
-                  }`}
+                  className={`p-1.5 rounded-lg transition-colors ${isVideoOff
+                    ? "bg-red-500/20 text-red-400"
+                    : "text-zinc-300 hover:bg-white/10 hover:text-white"
+                    }`}
                 >
                   {isVideoOff ? <VideoOff className="w-3.5 h-3.5" /> : <Video className="w-3.5 h-3.5" />}
                 </button>
@@ -790,11 +783,10 @@ export default function Home() {
                     onClick={handleStop}
                     disabled={status === "disconnected"}
                     title="Stop / Disconnect"
-                    className={`h-11 px-4 sm:px-5 rounded-xl text-sm font-medium transition-all duration-150 flex items-center justify-center gap-2 cursor-pointer ${
-                      status === "disconnected"
-                        ? "bg-zinc-100 text-zinc-300 border border-zinc-200/50 cursor-not-allowed"
-                        : "bg-zinc-100 hover:bg-red-50 hover:text-red-600 text-zinc-700 border border-zinc-200/70 active:scale-[0.98]"
-                    }`}
+                    className={`h-11 px-4 sm:px-5 rounded-xl text-sm font-medium transition-all duration-150 flex items-center justify-center gap-2 cursor-pointer ${status === "disconnected"
+                      ? "bg-zinc-100 text-zinc-300 border border-zinc-200/50 cursor-not-allowed"
+                      : "bg-zinc-100 hover:bg-red-50 hover:text-red-600 text-zinc-700 border border-zinc-200/70 active:scale-[0.98]"
+                      }`}
                   >
                     <Square className="w-3.5 h-3.5" />
                     <span>Stop</span>
@@ -826,11 +818,10 @@ export default function Home() {
                 type="button"
                 onClick={() => handleMatchPreferenceChange("any")}
                 title="Match with anyone"
-                className={`h-9 px-2.5 sm:px-3 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all duration-150 cursor-pointer ${
-                  matchPreference === "any"
-                    ? "bg-white text-zinc-950 shadow-2xs font-semibold ring-1 ring-zinc-200/80"
-                    : "text-zinc-500 hover:text-zinc-900 hover:bg-white/50"
-                }`}
+                className={`h-9 px-2.5 sm:px-3 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all duration-150 cursor-pointer ${matchPreference === "any"
+                  ? "bg-white text-zinc-950 shadow-2xs font-semibold ring-1 ring-zinc-200/80"
+                  : "text-zinc-500 hover:text-zinc-900 hover:bg-white/50"
+                  }`}
               >
                 <div className="w-4 h-4 rounded-full flex items-center justify-center">
                   <Image
@@ -849,11 +840,10 @@ export default function Home() {
                 type="button"
                 onClick={() => handleMatchPreferenceChange("female")}
                 title="Filter for female strangers"
-                className={`h-9 px-2.5 sm:px-3 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all duration-150 cursor-pointer ${
-                  matchPreference === "female"
-                    ? "bg-white text-zinc-950 shadow-2xs font-semibold ring-1 ring-zinc-200/80"
-                    : "text-zinc-500 hover:text-zinc-900 hover:bg-white/50"
-                }`}
+                className={`h-9 px-2.5 sm:px-3 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all duration-150 cursor-pointer ${matchPreference === "female"
+                  ? "bg-white text-zinc-950 shadow-2xs font-semibold ring-1 ring-zinc-200/80"
+                  : "text-zinc-500 hover:text-zinc-900 hover:bg-white/50"
+                  }`}
               >
                 <div className="w-4 h-4 rounded-full flex items-center justify-center">
                   <Image
@@ -872,11 +862,10 @@ export default function Home() {
                 type="button"
                 onClick={() => handleMatchPreferenceChange("male")}
                 title="Filter for male strangers"
-                className={`h-9 px-2.5 sm:px-3 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all duration-150 cursor-pointer ${
-                  matchPreference === "male"
-                    ? "bg-white text-zinc-950 shadow-2xs font-semibold ring-1 ring-zinc-200/80"
-                    : "text-zinc-500 hover:text-zinc-900 hover:bg-white/50"
-                }`}
+                className={`h-9 px-2.5 sm:px-3 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all duration-150 cursor-pointer ${matchPreference === "male"
+                  ? "bg-white text-zinc-950 shadow-2xs font-semibold ring-1 ring-zinc-200/80"
+                  : "text-zinc-500 hover:text-zinc-900 hover:bg-white/50"
+                  }`}
               >
                 <div className="w-4 h-4 rounded-full flex items-center justify-center">
                   <Image
@@ -917,8 +906,8 @@ export default function Home() {
                   {status === "connected"
                     ? "Connected to stranger"
                     : status === "searching"
-                    ? "Finding stranger..."
-                    : "Idle"}
+                      ? "Finding stranger..."
+                      : "Idle"}
                 </span>
               </div>
             </div>
@@ -956,11 +945,10 @@ export default function Home() {
                     {isYou ? "You" : "Stranger"} • {msg.timestamp}
                   </span>
                   <div
-                    className={`max-w-[85%] px-3 py-1.5 rounded-xl text-xs leading-relaxed ${
-                      isYou
-                        ? "bg-zinc-950 text-white rounded-tr-2xs shadow-2xs"
-                        : "bg-white text-zinc-800 border border-zinc-200/70 rounded-tl-2xs shadow-2xs"
-                    }`}
+                    className={`max-w-[85%] px-3 py-1.5 rounded-xl text-xs leading-relaxed ${isYou
+                      ? "bg-zinc-950 text-white rounded-tr-2xs shadow-2xs"
+                      : "bg-white text-zinc-800 border border-zinc-200/70 rounded-tl-2xs shadow-2xs"
+                      }`}
                   >
                     {msg.text}
                   </div>
@@ -983,11 +971,10 @@ export default function Home() {
             <button
               type="submit"
               disabled={!inputMessage.trim()}
-              className={`p-2 rounded-xl transition-all shadow-2xs ${
-                inputMessage.trim()
-                  ? "bg-zinc-950 text-white hover:bg-zinc-800 active:scale-95 cursor-pointer"
-                  : "bg-zinc-100 text-zinc-300 border border-zinc-200/40 cursor-not-allowed"
-              }`}
+              className={`p-2 rounded-xl transition-all shadow-2xs ${inputMessage.trim()
+                ? "bg-zinc-950 text-white hover:bg-zinc-800 active:scale-95 cursor-pointer"
+                : "bg-zinc-100 text-zinc-300 border border-zinc-200/40 cursor-not-allowed"
+                }`}
             >
               <Send className="w-3.5 h-3.5" />
             </button>
