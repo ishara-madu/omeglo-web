@@ -2,6 +2,8 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import Image from "next/image";
+import { io, Socket } from "socket.io-client";
+import type { DataConnection, MediaConnection } from "peerjs";
 import {
   Play,
   Square,
@@ -37,7 +39,7 @@ type MatchPreference = "any" | "female" | "male";
 // Eye-friendly Multicolor Omeglo Brand Wordmark
 function OmegloWordmark({ size = "text-[19px]" }: { size?: string }) {
   return (
-    <span className={`font-bold tracking-[0.01em] select-none inline-flex items-center font-sans antialiased ${size}`}>
+    <span className={`font-bold tracking-[0.03em] select-none inline-flex items-center space-x-[0.6px] font-sans antialiased ${size}`}>
       <span className="text-[#2563eb]">O</span>
       <span className="text-[#f43f5e]">m</span>
       <span className="text-[#f59e0b]">e</span>
@@ -92,6 +94,9 @@ function TvStaticCanvas() {
   );
 }
 
+const SOCKET_URL =
+  process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:5001";
+
 export default function Home() {
   const [status, setStatus] = useState<ConnectionStatus>("idle");
   const [messages, setMessages] = useState<ChatMessage[]>([
@@ -105,7 +110,8 @@ export default function Home() {
   const [inputMessage, setInputMessage] = useState("");
   const [isMicMuted, setIsMicMuted] = useState(false);
   const [isVideoOff, setIsVideoOff] = useState(false);
-  const [onlineCount] = useState("2,418");
+  const [onlineCount, setOnlineCount] = useState("1");
+  const [strangerGender, setStrangerGender] = useState<Gender>(null);
 
   // User Gender State & First-time Visit Modal
   const [userGender, setUserGender] = useState<Gender>(null);
@@ -119,6 +125,16 @@ export default function Home() {
   const [pipPos, setPipPos] = useState<{ x: number; y: number } | null>(null);
   const [isDragging, setIsDragging] = useState(false);
 
+  // Video & WebRTC Refs
+  const localVideoRef = useRef<HTMLVideoElement>(null);
+  const remoteVideoRef = useRef<HTMLVideoElement>(null);
+  const localStreamRef = useRef<MediaStream | null>(null);
+  const peerRef = useRef<any>(null);
+  const myPeerIdRef = useRef<string | null>(null);
+  const socketRef = useRef<Socket | null>(null);
+  const activeCallRef = useRef<MediaConnection | null>(null);
+  const dataConnRef = useRef<DataConnection | null>(null);
+
   const containerRef = useRef<HTMLDivElement>(null);
   const pipRef = useRef<HTMLDivElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
@@ -130,8 +146,81 @@ export default function Home() {
     initialY: number;
   }>({ startX: 0, startY: 0, initialX: 0, initialY: 0 });
 
-  // Load saved preferences on client mount
+  // Add system message
+  const addSystemMessage = useCallback((text: string) => {
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: `sys-${Date.now()}-${Math.random()}`,
+        sender: "system",
+        text,
+        timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      },
+    ]);
+  }, []);
+
+  // Setup P2P DataChannel Connection for text chat
+  const setupDataConnection = useCallback((conn: DataConnection) => {
+    dataConnRef.current = conn;
+
+    conn.on("data", (data: unknown) => {
+      if (typeof data === "string") {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `msg-${Date.now()}-${Math.random()}`,
+            sender: "stranger",
+            text: data,
+            timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+          },
+        ]);
+      }
+    });
+
+    conn.on("close", () => {
+      console.log("Data connection closed");
+    });
+  }, []);
+
+  // Initialize Local User Media (Camera & Mic)
+  const initLocalStream = useCallback(async () => {
+    if (localStreamRef.current) return localStreamRef.current;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: "user" },
+        audio: true,
+      });
+      localStreamRef.current = stream;
+      if (localVideoRef.current) {
+        localVideoRef.current.srcObject = stream;
+      }
+      return stream;
+    } catch (err) {
+      console.error("Camera/Mic access denied or error:", err);
+      addSystemMessage("Could not access camera or microphone. Please allow permissions.");
+      return null;
+    }
+  }, [addSystemMessage]);
+
+  // Clean up current active call and media streams for remote
+  const cleanupCall = useCallback(() => {
+    if (activeCallRef.current) {
+      activeCallRef.current.close();
+      activeCallRef.current = null;
+    }
+    if (dataConnRef.current) {
+      dataConnRef.current.close();
+      dataConnRef.current = null;
+    }
+    if (remoteVideoRef.current) {
+      remoteVideoRef.current.srcObject = null;
+    }
+    setStrangerGender(null);
+  }, []);
+
+  // Initialize Socket.io and PeerJS
   useEffect(() => {
+    // 1. Check localStorage for gender preference
     try {
       const savedGender = localStorage.getItem("omeglo_user_gender") as Gender;
       if (savedGender === "male" || savedGender === "female") {
@@ -148,13 +237,138 @@ export default function Home() {
     } catch {
       setShowGenderModal(true);
     }
-  }, []);
+
+    // 2. Initialize Socket.io Connection
+    const socket = io(SOCKET_URL, {
+      transports: ["websocket", "polling"],
+    });
+    socketRef.current = socket;
+
+    socket.on("connect", () => {
+      console.log("Connected to Matchmaking server:", socket.id);
+    });
+
+    socket.on("online-count", (count: number) => {
+      setOnlineCount(count.toLocaleString());
+    });
+
+    socket.on("waiting-in-queue", () => {
+      setStatus("searching");
+    });
+
+    // 3. Initialize PeerJS (WebRTC with Google STUN)
+    let peerInstance: any = null;
+
+    const initPeer = async () => {
+      const { default: Peer } = await import("peerjs");
+
+      const peer = new Peer({
+        config: {
+          iceServers: [
+            { urls: "stun:stun.l.google.com:19302" },
+            { urls: "stun:stun1.l.google.com:19302" },
+            { urls: "stun:stun2.l.google.com:19302" },
+          ],
+        },
+      });
+
+      peer.on("open", (id) => {
+        console.log("My PeerJS ID:", id);
+        myPeerIdRef.current = id;
+      });
+
+      // Handle Incoming Call from Stranger
+      peer.on("call", async (incomingCall) => {
+        const stream = localStreamRef.current || (await initLocalStream());
+        if (stream) {
+          incomingCall.answer(stream);
+        } else {
+          incomingCall.answer();
+        }
+
+        incomingCall.on("stream", (remoteStream) => {
+          if (remoteVideoRef.current) {
+            remoteVideoRef.current.srcObject = remoteStream;
+          }
+        });
+
+        activeCallRef.current = incomingCall;
+      });
+
+      // Handle Incoming Text Chat DataConnection
+      peer.on("connection", (conn) => {
+        setupDataConnection(conn);
+      });
+
+      peer.on("error", (err) => {
+        console.error("PeerJS Error:", err);
+      });
+
+      peerRef.current = peer;
+      peerInstance = peer;
+    };
+
+    initPeer();
+
+    // 4. Socket Matchmaking Events
+    socket.on("match-found", async ({ partnerPeerId, partnerGender, initiator }) => {
+      console.log("Match Found with Peer:", partnerPeerId, "Initiator:", initiator);
+      cleanupCall();
+      setStatus("connected");
+      setStrangerGender(partnerGender);
+      addSystemMessage("Connected with a stranger! Say hi.");
+
+      // Ensure local camera is streaming
+      const localStream = localStreamRef.current || (await initLocalStream());
+
+      if (initiator && peerRef.current && partnerPeerId) {
+        // Initiator calls partner
+        if (localStream) {
+          const call = peerRef.current.call(partnerPeerId, localStream);
+          call?.on("stream", (remoteStream: MediaStream) => {
+            if (remoteVideoRef.current) {
+              remoteVideoRef.current.srcObject = remoteStream;
+            }
+          });
+          activeCallRef.current = call;
+        }
+
+        // Initiator connects DataChannel for text chat
+        const conn = peerRef.current.connect(partnerPeerId);
+        if (conn) {
+          setupDataConnection(conn);
+        }
+      }
+    });
+
+    socket.on("partner-disconnected", () => {
+      cleanupCall();
+      setStatus("disconnected");
+      addSystemMessage("Stranger has disconnected.");
+    });
+
+    socket.on("chat-stopped", () => {
+      cleanupCall();
+      setStatus("disconnected");
+      addSystemMessage("You have stopped the chat.");
+    });
+
+    return () => {
+      socket.disconnect();
+      if (peerInstance) {
+        peerInstance.destroy();
+      }
+      if (localStreamRef.current) {
+        localStreamRef.current.getTracks().forEach((track) => track.stop());
+      }
+    };
+  }, [addSystemMessage, cleanupCall, initLocalStream, setupDataConnection]);
 
   // Save selected gender
   const handleSaveGender = (gender: "male" | "female") => {
     try {
       localStorage.setItem("omeglo_user_gender", gender);
-    } catch { }
+    } catch {}
     setUserGender(gender);
     setShowGenderModal(false);
   };
@@ -164,7 +378,7 @@ export default function Home() {
     setMatchPreference(pref);
     try {
       localStorage.setItem("omeglo_match_pref", pref);
-    } catch { }
+    } catch {}
   };
 
   // Auto-scroll chat
@@ -233,79 +447,79 @@ export default function Home() {
 
   // Get matching text for search
   const getSearchTargetText = () => {
-    if (matchPreference === "female") return "Looking for a female match...";
-    if (matchPreference === "male") return "Looking for a male match...";
-    return "Looking for a stranger (Anyone)...";
+    if (matchPreference === "female") return "Looking for a female stranger...";
+    if (matchPreference === "male") return "Looking for a male stranger...";
+    return "Looking for a stranger...";
   };
 
-  // Handle Start
-  const handleStart = useCallback(() => {
+  // Handle Start Matchmaking
+  const handleStart = useCallback(async () => {
+    await initLocalStream();
+    if (!myPeerIdRef.current) {
+      addSystemMessage("Connecting to peer network... Please wait.");
+      return;
+    }
+
+    cleanupCall();
     setStatus("searching");
-    setMessages((prev) => [
-      ...prev,
-      {
-        id: `sys-${Date.now()}`,
-        sender: "system",
-        text: getSearchTargetText(),
-        timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-      },
-    ]);
+    addSystemMessage(getSearchTargetText());
 
-    setTimeout(() => {
-      setStatus("connected");
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: `sys-${Date.now() + 1}`,
-          sender: "system",
-          text: "You're now chatting with a random stranger. Say hi!",
-          timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-        },
-      ]);
-    }, 1800);
-  }, [matchPreference]);
+    socketRef.current?.emit("find-match", {
+      peerId: myPeerIdRef.current,
+      gender: userGender || "male",
+      lookingFor: matchPreference,
+    });
+  }, [addSystemMessage, cleanupCall, initLocalStream, matchPreference, userGender]);
 
-  // Handle Stop
+  // Handle Stop Matchmaking
   const handleStop = useCallback(() => {
     if (status === "idle") return;
+    socketRef.current?.emit("leave-chat");
+    cleanupCall();
     setStatus("disconnected");
-    setMessages((prev) => [
-      ...prev,
-      {
-        id: `sys-${Date.now()}`,
-        sender: "system",
-        text: "You have disconnected.",
-        timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-      },
-    ]);
-  }, [status]);
+  }, [cleanupCall, status]);
 
-  // Handle Next
-  const handleNext = useCallback(() => {
+  // Handle Next (Skip Stranger & Find New Match)
+  const handleNext = useCallback(async () => {
+    await initLocalStream();
+    cleanupCall();
     setStatus("searching");
-    setMessages((prev) => [
-      ...prev,
-      {
-        id: `sys-${Date.now()}`,
-        sender: "system",
-        text: `Skipping... ${getSearchTargetText()}`,
-        timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-      },
-    ]);
+    addSystemMessage(`Skipping... ${getSearchTargetText()}`);
 
-    setTimeout(() => {
-      setStatus("connected");
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: `sys-${Date.now() + 1}`,
-          sender: "system",
-          text: "Connected with a new stranger. Say hi!",
-          timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-        },
-      ]);
-    }, 1600);
-  }, [matchPreference]);
+    if (myPeerIdRef.current) {
+      socketRef.current?.emit("find-match", {
+        peerId: myPeerIdRef.current,
+        gender: userGender || "male",
+        lookingFor: matchPreference,
+      });
+    }
+  }, [addSystemMessage, cleanupCall, initLocalStream, matchPreference, userGender]);
+
+  // Handle Mic Mute Toggle
+  const toggleMic = () => {
+    if (localStreamRef.current) {
+      const audioTrack = localStreamRef.current.getAudioTracks()[0];
+      if (audioTrack) {
+        audioTrack.enabled = isMicMuted; // Toggle enabled state
+        setIsMicMuted(!isMicMuted);
+      }
+    } else {
+      setIsMicMuted(!isMicMuted);
+    }
+  };
+
+  // Handle Video Turn On/Off Toggle
+  const toggleVideo = () => {
+    if (localStreamRef.current) {
+      const videoTrack = localStreamRef.current.getVideoTracks()[0];
+      if (videoTrack) {
+        videoTrack.enabled = isVideoOff; // Toggle enabled state
+        setIsVideoOff(!isVideoOff);
+      }
+    } else {
+      setIsVideoOff(!isVideoOff);
+    }
+  };
 
   // Keyboard Shortcuts (Esc to Stop/Next)
   useEffect(() => {
@@ -331,41 +545,27 @@ export default function Home() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [status, handleNext, handleStart, showGenderModal]);
 
-  // Handle Send Message
+  // Handle Send Message via P2P DataChannel
   const handleSendMessage = (e: React.FormEvent) => {
     e.preventDefault();
     if (!inputMessage.trim()) return;
 
+    const msgText = inputMessage.trim();
+
+    // Send over P2P DataChannel if connected
+    if (dataConnRef.current && dataConnRef.current.open) {
+      dataConnRef.current.send(msgText);
+    }
+
     const newMsg: ChatMessage = {
       id: `msg-${Date.now()}`,
       sender: "you",
-      text: inputMessage.trim(),
+      text: msgText,
       timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
     };
 
     setMessages((prev) => [...prev, newMsg]);
     setInputMessage("");
-
-    if (status === "connected") {
-      setTimeout(() => {
-        const replies = [
-          "Hey there! Where are you from?",
-          "Hello! How are you doing today?",
-          "Nice to meet you! 😊",
-          "Hey! Cool platform.",
-        ];
-        const randomReply = replies[Math.floor(Math.random() * replies.length)];
-        setMessages((prev) => [
-          ...prev,
-          {
-            id: `msg-${Date.now() + 2}`,
-            sender: "stranger",
-            text: randomReply,
-            timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-          },
-        ]);
-      }, 1500);
-    }
   };
 
   // Clear Chat
@@ -411,10 +611,11 @@ export default function Home() {
               <button
                 type="button"
                 onClick={() => setTempSelectedGender("male")}
-                className={`group relative p-4 rounded-2xl border flex flex-col items-center gap-3 transition-all duration-150 cursor-pointer ${tempSelectedGender === "male"
-                  ? "border-zinc-950 bg-zinc-50/80 ring-2 ring-zinc-950 shadow-xs"
-                  : "border-zinc-200 hover:border-zinc-300 hover:bg-zinc-50/50"
-                  }`}
+                className={`group relative p-4 rounded-2xl border flex flex-col items-center gap-3 transition-all duration-150 cursor-pointer ${
+                  tempSelectedGender === "male"
+                    ? "border-zinc-950 bg-zinc-50/80 ring-2 ring-zinc-950 shadow-xs"
+                    : "border-zinc-200 hover:border-zinc-300 hover:bg-zinc-50/50"
+                }`}
               >
                 {tempSelectedGender === "male" && (
                   <div className="absolute top-2.5 right-2.5 w-5 h-5 rounded-full bg-zinc-950 text-white flex items-center justify-center shadow-xs">
@@ -440,10 +641,11 @@ export default function Home() {
               <button
                 type="button"
                 onClick={() => setTempSelectedGender("female")}
-                className={`group relative p-4 rounded-2xl border flex flex-col items-center gap-3 transition-all duration-150 cursor-pointer ${tempSelectedGender === "female"
-                  ? "border-zinc-950 bg-zinc-50/80 ring-2 ring-zinc-950 shadow-xs"
-                  : "border-zinc-200 hover:border-zinc-300 hover:bg-zinc-50/50"
-                  }`}
+                className={`group relative p-4 rounded-2xl border flex flex-col items-center gap-3 transition-all duration-150 cursor-pointer ${
+                  tempSelectedGender === "female"
+                    ? "border-zinc-950 bg-zinc-50/80 ring-2 ring-zinc-950 shadow-xs"
+                    : "border-zinc-200 hover:border-zinc-300 hover:bg-zinc-50/50"
+                }`}
               >
                 {tempSelectedGender === "female" && (
                   <div className="absolute top-2.5 right-2.5 w-5 h-5 rounded-full bg-zinc-950 text-white flex items-center justify-center shadow-xs">
@@ -483,7 +685,7 @@ export default function Home() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-15 flex items-center justify-between">
           {/* Brand Logo & Multicolor Wordmark */}
           <div className="flex items-center gap-2.5">
-            {/* Minimalist Logo Icon (No text in image) */}
+            {/* Minimalist Logo Icon */}
             <div className="w-8.5 h-8.5 rounded-lg overflow-hidden flex items-center justify-center transition-transform hover:scale-105">
               <Image
                 src="/logo.webp"
@@ -506,7 +708,7 @@ export default function Home() {
             </div>
           </div>
 
-          {/* User Gender Tag & Live Badges */}
+          {/* User Gender Tag & Live Online Badges */}
           <div className="flex items-center gap-2.5 sm:gap-4 text-xs">
             {/* Clickable User Gender SVG Badge */}
             {userGender && (
@@ -532,7 +734,7 @@ export default function Home() {
               </button>
             )}
 
-            {/* Online Counter */}
+            {/* Real-time Online Counter from Socket Server */}
             <div className="flex items-center gap-2 px-2.5 py-1 rounded-full bg-zinc-100/90 text-zinc-700 border border-zinc-200/50">
               <span className="relative flex h-1.5 w-1.5">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
@@ -545,7 +747,7 @@ export default function Home() {
 
             <div className="hidden md:flex items-center gap-1.5 text-zinc-400">
               <Shield className="w-3.5 h-3.5" />
-              <span>Anonymous</span>
+              <span>P2P Encrypted</span>
             </div>
           </div>
         </div>
@@ -560,24 +762,39 @@ export default function Home() {
             ref={containerRef}
             className="relative w-full aspect-4/3 sm:aspect-16/10 lg:aspect-auto flex-1 min-h-[380px] sm:min-h-[480px] lg:min-h-[540px] bg-zinc-950 rounded-2xl overflow-hidden border border-zinc-800/80 shadow-xs flex flex-col items-center justify-center text-zinc-400"
           >
+            {/* Stranger Live WebRTC Video Element */}
+            <video
+              ref={remoteVideoRef}
+              autoPlay
+              playsInline
+              className={`absolute inset-0 w-full h-full object-cover z-0 ${
+                status === "connected" ? "block" : "hidden"
+              }`}
+            />
+
             {/* Stranger Badge (Top Left) */}
             <div className="absolute top-4 left-4 z-10 flex items-center gap-2 bg-black/60 backdrop-blur-md px-3 py-1 rounded-full border border-white/10 text-white text-xs font-medium pointer-events-none">
               <span
-                className={`w-2 h-2 rounded-full transition-colors duration-300 ${status === "connected"
-                  ? "bg-emerald-500"
-                  : status === "searching"
+                className={`w-2 h-2 rounded-full transition-colors duration-300 ${
+                  status === "connected"
+                    ? "bg-emerald-500"
+                    : status === "searching"
                     ? "bg-amber-400 animate-pulse"
                     : "bg-zinc-600"
-                  }`}
+                }`}
               />
-              <span className="text-[11px] font-medium tracking-tight">Stranger</span>
+              <span className="text-[11px] font-medium tracking-tight">
+                {status === "connected" && strangerGender
+                  ? `Stranger (${strangerGender === "female" ? "♀ Female" : "♂ Male"})`
+                  : "Stranger"}
+              </span>
             </div>
 
             {/* Quality / Status Badge (Top Right) */}
             {status === "connected" && (
               <div className="absolute top-4 right-4 z-10 bg-black/60 backdrop-blur-md text-[11px] text-zinc-300 px-2.5 py-1 rounded-full border border-white/10 flex items-center gap-1.5 pointer-events-none">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                Live HD
+                Live P2P
               </div>
             )}
 
@@ -597,14 +814,14 @@ export default function Home() {
                   </div>
                   <div className="space-y-0.5">
                     <p className="text-zinc-100 font-medium text-sm">
-                      Connecting to server...
+                      Connecting to matchmaking...
                     </p>
                     <p className="text-zinc-400 text-xs font-mono">
                       {matchPreference === "female"
                         ? "Looking for female match"
                         : matchPreference === "male"
-                          ? "Looking for male match"
-                          : "Looking for stranger"}
+                        ? "Looking for male match"
+                        : "Looking for stranger"}
                     </p>
                   </div>
                 </div>
@@ -623,17 +840,6 @@ export default function Home() {
                     Press Start below to connect with a random stranger.
                   </p>
                 </div>
-              </div>
-            )}
-
-            {/* CONNECTED STATE */}
-            {status === "connected" && (
-              <div className="w-full h-full flex flex-col items-center justify-center bg-radial from-zinc-900 to-zinc-950 p-6 text-center pointer-events-none z-0">
-                <div className="w-20 h-20 rounded-full bg-zinc-900/90 border border-zinc-800 flex items-center justify-center text-zinc-400 shadow-inner">
-                  <User className="w-10 h-10 text-zinc-500 stroke-[1.5]" />
-                </div>
-                <p className="text-zinc-300 font-medium text-sm mt-3">Stranger's Video Stream</p>
-                <p className="text-zinc-500 text-xs mt-0.5">Connected • Encrypted</p>
               </div>
             )}
 
@@ -656,11 +862,11 @@ export default function Home() {
               style={
                 pipPos
                   ? {
-                    left: `${pipPos.x}px`,
-                    top: `${pipPos.y}px`,
-                    right: "auto",
-                    bottom: "auto",
-                  }
+                      left: `${pipPos.x}px`,
+                      top: `${pipPos.y}px`,
+                      right: "auto",
+                      bottom: "auto",
+                    }
                   : undefined
               }
               onMouseDown={(e) => {
@@ -671,12 +877,25 @@ export default function Home() {
                 if ((e.target as HTMLElement).closest("button")) return;
                 startDrag(e.touches[0].clientX, e.touches[0].clientY);
               }}
-              className={`absolute ${!pipPos ? "bottom-4 right-4" : ""
-                } z-20 w-32 h-44 sm:w-38 sm:h-50 bg-zinc-900/95 border border-white/20 rounded-2xl shadow-2xl overflow-hidden backdrop-blur-md flex flex-col justify-between p-2.5 transition-shadow ${isDragging ? "cursor-grabbing ring-2 ring-zinc-400/40" : "cursor-grab hover:border-white/40"
-                }`}
+              className={`absolute ${
+                !pipPos ? "bottom-4 right-4" : ""
+              } z-20 w-32 h-44 sm:w-38 sm:h-50 bg-zinc-900/95 border border-white/20 rounded-2xl shadow-2xl overflow-hidden backdrop-blur-md flex flex-col justify-between p-2.5 transition-shadow ${
+                isDragging ? "cursor-grabbing ring-2 ring-zinc-400/40" : "cursor-grab hover:border-white/40"
+              }`}
             >
+              {/* Local Webcam Video Stream */}
+              <video
+                ref={localVideoRef}
+                autoPlay
+                playsInline
+                muted
+                className={`absolute inset-0 w-full h-full object-cover -z-10 ${
+                  isVideoOff ? "opacity-0" : "opacity-100"
+                }`}
+              />
+
               {/* Drag Handle & Label */}
-              <div className="flex items-center justify-between w-full">
+              <div className="flex items-center justify-between w-full z-10">
                 <div className="flex items-center gap-1.5 bg-black/60 backdrop-blur-md px-2 py-0.5 rounded-full border border-white/10 text-white text-[10px] font-medium">
                   {userGender ? (
                     <div className="w-3 h-3 rounded-full overflow-hidden flex items-center justify-center">
@@ -698,46 +917,33 @@ export default function Home() {
                 </div>
               </div>
 
-              {/* Self Video Content */}
-              <div className="flex-1 flex flex-col items-center justify-center my-1 pointer-events-none">
-                {isVideoOff ? (
+              {/* Video Off Fallback Avatar */}
+              {isVideoOff && (
+                <div className="flex-1 flex flex-col items-center justify-center my-1 pointer-events-none z-10">
                   <div className="flex flex-col items-center gap-1">
                     <VideoOff className="w-5 h-5 text-zinc-500" />
                     <span className="text-[10px] text-zinc-500">Camera Off</span>
                   </div>
-                ) : (
-                  <div className="flex flex-col items-center gap-1.5">
-                    <div className="w-10 h-10 rounded-2xl bg-zinc-800/80 border border-zinc-700/80 p-1.5 flex items-center justify-center shadow-inner">
-                      {userGender ? (
-                        <Image
-                          src={userGender === "male" ? "/male.svg" : "/female.svg"}
-                          alt="Self Avatar"
-                          width={40}
-                          height={40}
-                          className="w-full h-full object-contain"
-                        />
-                      ) : (
-                        <User className="w-5 h-5 stroke-[1.5] text-zinc-400" />
-                      )}
-                    </div>
-                    <span className="text-[10px] text-zinc-400 font-medium">Your Camera</span>
-                  </div>
-                )}
-              </div>
+                </div>
+              )}
+
+              {/* Spacer if video is visible */}
+              {!isVideoOff && <div className="flex-1" />}
 
               {/* In-PiP Media Controls */}
-              <div className="flex items-center justify-center gap-1 bg-black/60 backdrop-blur-md py-1 px-1.5 rounded-xl border border-white/10">
+              <div className="flex items-center justify-center gap-1 bg-black/60 backdrop-blur-md py-1 px-1.5 rounded-xl border border-white/10 z-10">
                 <button
                   type="button"
                   onClick={(e) => {
                     e.stopPropagation();
-                    setIsMicMuted(!isMicMuted);
+                    toggleMic();
                   }}
                   title={isMicMuted ? "Unmute Mic" : "Mute Mic"}
-                  className={`p-1.5 rounded-lg transition-colors ${isMicMuted
-                    ? "bg-red-500/20 text-red-400"
-                    : "text-zinc-300 hover:bg-white/10 hover:text-white"
-                    }`}
+                  className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                    isMicMuted
+                      ? "bg-red-500/20 text-red-400"
+                      : "text-zinc-300 hover:bg-white/10 hover:text-white"
+                  }`}
                 >
                   {isMicMuted ? <MicOff className="w-3.5 h-3.5" /> : <Mic className="w-3.5 h-3.5" />}
                 </button>
@@ -745,13 +951,14 @@ export default function Home() {
                   type="button"
                   onClick={(e) => {
                     e.stopPropagation();
-                    setIsVideoOff(!isVideoOff);
+                    toggleVideo();
                   }}
                   title={isVideoOff ? "Turn Cam On" : "Turn Cam Off"}
-                  className={`p-1.5 rounded-lg transition-colors ${isVideoOff
-                    ? "bg-red-500/20 text-red-400"
-                    : "text-zinc-300 hover:bg-white/10 hover:text-white"
-                    }`}
+                  className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                    isVideoOff
+                      ? "bg-red-500/20 text-red-400"
+                      : "text-zinc-300 hover:bg-white/10 hover:text-white"
+                  }`}
                 >
                   {isVideoOff ? <VideoOff className="w-3.5 h-3.5" /> : <Video className="w-3.5 h-3.5" />}
                 </button>
@@ -783,10 +990,11 @@ export default function Home() {
                     onClick={handleStop}
                     disabled={status === "disconnected"}
                     title="Stop / Disconnect"
-                    className={`h-11 px-4 sm:px-5 rounded-xl text-sm font-medium transition-all duration-150 flex items-center justify-center gap-2 cursor-pointer ${status === "disconnected"
-                      ? "bg-zinc-100 text-zinc-300 border border-zinc-200/50 cursor-not-allowed"
-                      : "bg-zinc-100 hover:bg-red-50 hover:text-red-600 text-zinc-700 border border-zinc-200/70 active:scale-[0.98]"
-                      }`}
+                    className={`h-11 px-4 sm:px-5 rounded-xl text-sm font-medium transition-all duration-150 flex items-center justify-center gap-2 cursor-pointer ${
+                      status === "disconnected"
+                        ? "bg-zinc-100 text-zinc-300 border border-zinc-200/50 cursor-not-allowed"
+                        : "bg-zinc-100 hover:bg-red-50 hover:text-red-600 text-zinc-700 border border-zinc-200/70 active:scale-[0.98]"
+                    }`}
                   >
                     <Square className="w-3.5 h-3.5" />
                     <span>Stop</span>
@@ -818,10 +1026,11 @@ export default function Home() {
                 type="button"
                 onClick={() => handleMatchPreferenceChange("any")}
                 title="Match with anyone"
-                className={`h-9 px-2.5 sm:px-3 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all duration-150 cursor-pointer ${matchPreference === "any"
-                  ? "bg-white text-zinc-950 shadow-2xs font-semibold ring-1 ring-zinc-200/80"
-                  : "text-zinc-500 hover:text-zinc-900 hover:bg-white/50"
-                  }`}
+                className={`h-9 px-2.5 sm:px-3 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all duration-150 cursor-pointer ${
+                  matchPreference === "any"
+                    ? "bg-white text-zinc-950 shadow-2xs font-semibold ring-1 ring-zinc-200/80"
+                    : "text-zinc-500 hover:text-zinc-900 hover:bg-white/50"
+                }`}
               >
                 <div className="w-4 h-4 rounded-full flex items-center justify-center">
                   <Image
@@ -840,10 +1049,11 @@ export default function Home() {
                 type="button"
                 onClick={() => handleMatchPreferenceChange("female")}
                 title="Filter for female strangers"
-                className={`h-9 px-2.5 sm:px-3 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all duration-150 cursor-pointer ${matchPreference === "female"
-                  ? "bg-white text-zinc-950 shadow-2xs font-semibold ring-1 ring-zinc-200/80"
-                  : "text-zinc-500 hover:text-zinc-900 hover:bg-white/50"
-                  }`}
+                className={`h-9 px-2.5 sm:px-3 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all duration-150 cursor-pointer ${
+                  matchPreference === "female"
+                    ? "bg-white text-zinc-950 shadow-2xs font-semibold ring-1 ring-zinc-200/80"
+                    : "text-zinc-500 hover:text-zinc-900 hover:bg-white/50"
+                }`}
               >
                 <div className="w-4 h-4 rounded-full flex items-center justify-center">
                   <Image
@@ -862,10 +1072,11 @@ export default function Home() {
                 type="button"
                 onClick={() => handleMatchPreferenceChange("male")}
                 title="Filter for male strangers"
-                className={`h-9 px-2.5 sm:px-3 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all duration-150 cursor-pointer ${matchPreference === "male"
-                  ? "bg-white text-zinc-950 shadow-2xs font-semibold ring-1 ring-zinc-200/80"
-                  : "text-zinc-500 hover:text-zinc-900 hover:bg-white/50"
-                  }`}
+                className={`h-9 px-2.5 sm:px-3 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all duration-150 cursor-pointer ${
+                  matchPreference === "male"
+                    ? "bg-white text-zinc-950 shadow-2xs font-semibold ring-1 ring-zinc-200/80"
+                    : "text-zinc-500 hover:text-zinc-900 hover:bg-white/50"
+                }`}
               >
                 <div className="w-4 h-4 rounded-full flex items-center justify-center">
                   <Image
@@ -901,13 +1112,13 @@ export default function Home() {
                 <MessageSquare className="w-3.5 h-3.5" />
               </div>
               <div>
-                <h2 className="text-xs font-semibold text-zinc-950 leading-none">Text Chat</h2>
+                <h2 className="text-xs font-semibold text-zinc-950 leading-none">P2P Text Chat</h2>
                 <span className="text-[10px] text-zinc-400 font-medium">
                   {status === "connected"
-                    ? "Connected to stranger"
+                    ? "Direct Encrypted Connection"
                     : status === "searching"
-                      ? "Finding stranger..."
-                      : "Idle"}
+                    ? "Finding stranger..."
+                    : "Idle"}
                 </span>
               </div>
             </div>
@@ -945,10 +1156,11 @@ export default function Home() {
                     {isYou ? "You" : "Stranger"} • {msg.timestamp}
                   </span>
                   <div
-                    className={`max-w-[85%] px-3 py-1.5 rounded-xl text-xs leading-relaxed ${isYou
-                      ? "bg-zinc-950 text-white rounded-tr-2xs shadow-2xs"
-                      : "bg-white text-zinc-800 border border-zinc-200/70 rounded-tl-2xs shadow-2xs"
-                      }`}
+                    className={`max-w-[85%] px-3 py-1.5 rounded-xl text-xs leading-relaxed ${
+                      isYou
+                        ? "bg-zinc-950 text-white rounded-tr-2xs shadow-2xs"
+                        : "bg-white text-zinc-800 border border-zinc-200/70 rounded-tl-2xs shadow-2xs"
+                    }`}
                   >
                     {msg.text}
                   </div>
@@ -965,16 +1177,22 @@ export default function Home() {
               type="text"
               value={inputMessage}
               onChange={(e) => setInputMessage(e.target.value)}
-              placeholder="Type a message..."
-              className="flex-1 bg-zinc-50 hover:bg-zinc-100/60 focus:bg-white text-xs text-zinc-900 placeholder:text-zinc-400 px-3 py-2 rounded-xl border border-zinc-200/80 focus:outline-none focus:ring-1 focus:ring-zinc-950 focus:border-zinc-950 transition-all"
+              placeholder={
+                status === "connected"
+                  ? "Type a message to stranger..."
+                  : "Connect to start chatting..."
+              }
+              disabled={status !== "connected"}
+              className="flex-1 bg-zinc-50 hover:bg-zinc-100/60 focus:bg-white text-xs text-zinc-900 placeholder:text-zinc-400 px-3 py-2 rounded-xl border border-zinc-200/80 focus:outline-none focus:ring-1 focus:ring-zinc-950 focus:border-zinc-950 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
             />
             <button
               type="submit"
-              disabled={!inputMessage.trim()}
-              className={`p-2 rounded-xl transition-all shadow-2xs ${inputMessage.trim()
-                ? "bg-zinc-950 text-white hover:bg-zinc-800 active:scale-95 cursor-pointer"
-                : "bg-zinc-100 text-zinc-300 border border-zinc-200/40 cursor-not-allowed"
-                }`}
+              disabled={!inputMessage.trim() || status !== "connected"}
+              className={`p-2 rounded-xl transition-all shadow-2xs ${
+                inputMessage.trim() && status === "connected"
+                  ? "bg-zinc-950 text-white hover:bg-zinc-800 active:scale-95 cursor-pointer"
+                  : "bg-zinc-100 text-zinc-300 border border-zinc-200/40 cursor-not-allowed"
+              }`}
             >
               <Send className="w-3.5 h-3.5" />
             </button>
