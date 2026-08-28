@@ -38,6 +38,7 @@ import {
   Flag,
   ShieldAlert,
 } from "lucide-react";
+import { getBrowserFingerprint } from "@/lib/fingerprint";
 
 type ChatMessage = {
   id: string;
@@ -1225,6 +1226,7 @@ export default function Home() {
       gender: userGender || "male",
       lookingFor: matchPreference,
       mode: chatMode,
+      fingerprint: getBrowserFingerprint(),
     });
   }, [addSystemMessage, assessNetworkQuality, chatMode, cleanupCall, initLocalStream, matchPreference, userGender]);
 
@@ -1266,6 +1268,7 @@ export default function Home() {
         gender: userGender || "male",
         lookingFor: matchPreference,
         mode: chatMode,
+        fingerprint: getBrowserFingerprint(),
       });
     }
   }, [addSystemMessage, assessNetworkQuality, chatMode, cleanupCall, initLocalStream, matchPreference, userGender]);
