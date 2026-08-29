@@ -1556,7 +1556,7 @@ export default function Home() {
           return;
         }
       }
-    }, 1600);
+    }, 2000);
 
     return () => clearInterval(interval);
   }, [status, chatMode, handleNext, handleStop, showModerationAlert]);
