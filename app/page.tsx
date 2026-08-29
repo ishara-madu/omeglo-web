@@ -5,6 +5,14 @@ import Image from "next/image";
 import { io, Socket } from "socket.io-client";
 import type { DataConnection, MediaConnection } from "peerjs";
 import {
+  CallDisconnectedIcon,
+  MaleAvatarIcon,
+  FemaleAvatarIcon,
+  GenderBothIcon,
+  GenderFemaleIcon,
+  GenderMaleIcon,
+} from "@/components/icons";
+import {
   Play,
   Square,
   SkipForward,
@@ -1971,14 +1979,7 @@ export default function Home() {
                   </div>
                 )}
                 <div className="w-18 h-18 flex items-center justify-center group-hover:scale-105 transition-transform">
-                  <Image
-                    src="/male.svg"
-                    alt="Male Avatar"
-                    width={68}
-                    height={68}
-                    className="w-full h-full object-contain"
-                    priority
-                  />
+                  <MaleAvatarIcon className="w-full h-full object-contain" />
                 </div>
                 <span className="text-xs font-semibold text-zinc-900 tracking-tight">
                   Male
@@ -2000,14 +2001,7 @@ export default function Home() {
                   </div>
                 )}
                 <div className="w-18 h-18 flex items-center justify-center group-hover:scale-105 transition-transform">
-                  <Image
-                    src="/female.svg"
-                    alt="Female Avatar"
-                    width={68}
-                    height={68}
-                    className="w-full h-full object-contain"
-                    priority
-                  />
+                  <FemaleAvatarIcon className="w-full h-full object-contain" />
                 </div>
                 <span className="text-xs font-semibold text-zinc-900 tracking-tight">
                   Female
@@ -2231,13 +2225,11 @@ export default function Home() {
                 className="flex items-center gap-1.5 sm:gap-2 px-2.5 py-1 rounded-full bg-zinc-100/90 hover:bg-zinc-200/80 text-zinc-800 border border-zinc-200/60 transition-colors cursor-pointer"
               >
                 <div className="w-3.5 h-3.5 sm:w-4 sm:h-4 rounded-full overflow-hidden flex items-center justify-center shrink-0">
-                  <Image
-                    src={userGender === "male" ? "/male.svg" : "/female.svg"}
-                    alt={userGender}
-                    width={16}
-                    height={16}
-                    className="w-full h-full object-contain"
-                  />
+                  {userGender === "male" ? (
+                    <MaleAvatarIcon className="w-full h-full object-contain" />
+                  ) : (
+                    <FemaleAvatarIcon className="w-full h-full object-contain" />
+                  )}
                 </div>
                 <span className="capitalize font-medium text-[11px]">{userGender}</span>
                 <Edit2 className="w-2.5 h-2.5 text-zinc-400 ml-0.5 hidden sm:inline" />
@@ -2473,13 +2465,11 @@ export default function Home() {
               <div className="flex flex-col items-center gap-4 p-6 text-center select-none z-10 animate-in fade-in">
                 <div className="relative">
                   <div className="w-24 h-24 flex items-center justify-center">
-                    <Image
-                      src={strangerGender === "female" ? "/female.svg" : "/male.svg"}
-                      alt="Stranger Avatar"
-                      width={96}
-                      height={96}
-                      className="w-full h-full object-contain drop-shadow-md"
-                    />
+                    {strangerGender === "female" ? (
+                      <FemaleAvatarIcon className="w-full h-full object-contain drop-shadow-md" />
+                    ) : (
+                      <MaleAvatarIcon className="w-full h-full object-contain drop-shadow-md" />
+                    )}
                   </div>
                   <span className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-emerald-500 border-2 border-zinc-950 flex items-center justify-center shadow-xs text-white" title="Connected">
                     <Check className="w-3 h-3 stroke-[3]" />
@@ -2499,16 +2489,7 @@ export default function Home() {
 
             {/* IDLE STATE */}
             {status === "idle" && (
-              <div className="flex flex-col items-center gap-3.5 p-6 text-center select-none pointer-events-none z-0">
-                <div className="flex items-center justify-center mb-1">
-                  <Image
-                    src={chatMode === "text" ? "/chat-text.svg" : "/chat-video.svg"}
-                    alt={chatMode === "text" ? "Ready for Text Chat" : "Ready for Video Chat"}
-                    width={48}
-                    height={48}
-                    className="w-12 h-12 object-contain drop-shadow-md"
-                  />
-                </div>
+              <div className="flex flex-col items-center gap-2 p-6 text-center select-none pointer-events-none z-0 max-w-xs animate-in fade-in">
                 <div className="space-y-1">
                   <p className="text-zinc-200 font-semibold text-sm">
                     {chatMode === "text" ? "Ready for Random Text Chat" : "Ready for Video Chat"}
@@ -2526,13 +2507,7 @@ export default function Home() {
             {status === "disconnected" && (
               <div className="flex flex-col items-center gap-3.5 p-6 text-center select-none z-10 max-w-xs animate-in fade-in">
                 <div className="flex items-center justify-center mb-1">
-                  <Image
-                    src="/call-disconnected.svg"
-                    alt="Stranger Disconnected"
-                    width={48}
-                    height={48}
-                    className="w-12 h-12 object-contain drop-shadow-md"
-                  />
+                  <CallDisconnectedIcon className="w-12 h-12 drop-shadow-md" />
                 </div>
                 <div className="space-y-1">
                   <p className="text-zinc-200 font-semibold text-sm">Stranger Disconnected</p>
@@ -2655,13 +2630,11 @@ export default function Home() {
                       <>
                         {userGender ? (
                           <div className="w-2.5 h-2.5 rounded-full overflow-hidden flex items-center justify-center">
-                            <Image
-                              src={userGender === "male" ? "/male.svg" : "/female.svg"}
-                              alt={userGender}
-                              width={10}
-                              height={10}
-                              className="w-full h-full object-contain"
-                            />
+                            {userGender === "male" ? (
+                              <MaleAvatarIcon className="w-full h-full object-contain" />
+                            ) : (
+                              <FemaleAvatarIcon className="w-full h-full object-contain" />
+                            )}
                           </div>
                         ) : (
                           <span className="w-1 h-1 rounded-full bg-zinc-300" />
@@ -2859,13 +2832,7 @@ export default function Home() {
                   }`}
               >
                 <div className="w-4 h-4 rounded-full flex items-center justify-center shrink-0">
-                  <Image
-                    src="/gender-both.svg"
-                    alt="Both"
-                    width={16}
-                    height={16}
-                    className="w-full h-full object-contain"
-                  />
+                  <GenderBothIcon className="w-full h-full object-contain" />
                 </div>
                 <span>Both</span>
               </button>
@@ -2881,13 +2848,7 @@ export default function Home() {
                   }`}
               >
                 <div className="w-4 h-4 rounded-full flex items-center justify-center shrink-0">
-                  <Image
-                    src="/gender-female.svg"
-                    alt="Female Symbol"
-                    width={16}
-                    height={16}
-                    className="w-full h-full object-contain"
-                  />
+                  <GenderFemaleIcon className="w-full h-full object-contain" />
                 </div>
                 <span>Female</span>
               </button>
@@ -2903,13 +2864,7 @@ export default function Home() {
                   }`}
               >
                 <div className="w-4 h-4 rounded-full flex items-center justify-center shrink-0">
-                  <Image
-                    src="/gender-male.svg"
-                    alt="Male Symbol"
-                    width={16}
-                    height={16}
-                    className="w-full h-full object-contain"
-                  />
+                  <GenderMaleIcon className="w-full h-full object-contain" />
                 </div>
                 <span>Male</span>
               </button>
