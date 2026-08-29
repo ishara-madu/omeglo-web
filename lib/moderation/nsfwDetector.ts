@@ -1,7 +1,7 @@
 /**
  * NSFWJS (TensorFlow.js) Intelligent Nudity & NSFW Content Shield for Omeglo
- * Detects genuine pornography, explicit nudity, and flashing while allowing
- * normal clothing variations (sleeveless vests/බැනියම්, singlets, tank tops, and bare shoulders).
+ * Detects genuine nudity, flashing, and pornography while allowing
+ * normal clothing (sleeveless vests/බැනියම්, singlets, tank tops, and bare arms).
  */
 
 let isNsfwLoading = false;
@@ -81,8 +81,8 @@ export interface NsfwCheckResult {
 }
 
 /**
- * Classify video frames with high precision.
- * Distinguishes explicit pornography from standard casual wear (e.g. vests / singlets / tank tops).
+ * Classify video frames with balanced precision.
+ * Distinguishes explicit nudity from standard casual wear (e.g. vests / singlets / tank tops).
  */
 export async function checkVideoFrame(videoElement: HTMLVideoElement): Promise<NsfwCheckResult> {
   if (!videoElement || videoElement.readyState < 2 || videoElement.videoWidth === 0) {
@@ -109,20 +109,27 @@ export async function checkVideoFrame(videoElement: HTMLVideoElement): Promise<N
         const sexyProb = predictions.find((p) => p.className === "Sexy")?.probability || 0;
         const neutralProb = predictions.find((p) => p.className === "Neutral")?.probability || 0;
 
-        // ACCURATE DISCRIMINATION LOGIC:
-        // 1. Explicit Pornography / Genital Nudity: pornProb >= 0.52
-        // 2. Animated Porn: hentaiProb >= 0.65
-        // 3. Top classification is Porn with clear confidence: top.className === 'Porn' && pornProb >= 0.42
-        // Note: Casual wear, sleeveless vests (බැනියම්), singlets, and bare arms score high in 'Sexy' or 'Neutral', which are fully allowed!
-        const isExplicitPorn =
-          pornProb >= 0.52 ||
-          hentaiProb >= 0.65 ||
-          (top.className === "Porn" && pornProb >= 0.42 && pornProb > sexyProb);
+        // SMART BALANCED DECISION MATRIX:
+        // 1. Direct Pornography / Explicit Genital Nudity: pornProb >= 0.28
+        // 2. Animated Porn: hentaiProb >= 0.45
+        // 3. Completely Nude Body (no clothes / bare body): sexyProb >= 0.55 AND neutralProb <= 0.32 AND pornProb >= 0.08
+        // 4. Heavy Exposure: pornProb + sexyProb >= 0.70 AND neutralProb <= 0.28
+        // 5. Top Class is Porn: top.className === 'Porn' && pornProb >= 0.25
+        //
+        // NOTE ON VESTS (බැනියම්):
+        // Wearing a vest/singlet gives high 'Neutral' score (neutralProb > 0.40) with very low porn (pornProb < 0.12),
+        // so it safely PASSES without false alarm!
+        const isNsfw =
+          pornProb >= 0.28 ||
+          hentaiProb >= 0.45 ||
+          (top.className === "Porn" && pornProb >= 0.25) ||
+          (sexyProb >= 0.55 && neutralProb <= 0.32 && pornProb >= 0.08) ||
+          (pornProb + sexyProb >= 0.70 && neutralProb <= 0.28);
 
-        if (isExplicitPorn) {
+        if (isNsfw) {
           return {
             isNsfw: true,
-            topCategory: "Porn",
+            topCategory: pornProb >= 0.25 ? "Porn" : "Explicit Nudity",
             probability: Math.max(pornProb, top.probability),
             rawPredictions: predictions,
           };
