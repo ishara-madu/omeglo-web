@@ -23,6 +23,7 @@ import {
   ArrowLeft,
   ChevronRight,
   Eye,
+  EyeOff,
   X,
   Check,
   CheckSquare,
@@ -108,6 +109,7 @@ export default function AdminPage() {
   const [adminKey, setAdminKey] = useState<string>("");
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [pinInput, setPinInput] = useState<string>("");
+  const [showPassword, setShowPassword] = useState<boolean>(false);
   const [authError, setAuthError] = useState<string>("");
 
   const [activeTab, setActiveTab] = useState<Tab>("overview");
@@ -567,15 +569,24 @@ export default function AdminPage() {
           </p>
 
           <form onSubmit={handleLogin} className="w-full space-y-3">
-            <div>
+            <div className="relative flex items-center">
               <input
-                type="password"
+                type={showPassword ? "text" : "password"}
                 value={pinInput}
                 onChange={(e) => setPinInput(e.target.value)}
                 placeholder="Enter Admin Passcode..."
                 autoFocus
-                className="w-full h-11 px-4 rounded-xl bg-zinc-950 border border-zinc-700/80 text-white text-sm text-center tracking-widest placeholder:text-zinc-600 focus:outline-none focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400 transition-all font-mono"
+                className="w-full h-11 pl-4 pr-11 rounded-xl bg-zinc-950 border border-zinc-700/80 text-white text-sm text-center tracking-widest placeholder:text-zinc-600 focus:outline-none focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400 transition-all font-mono"
               />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                tabIndex={-1}
+                className="absolute right-2.5 p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors cursor-pointer"
+                title={showPassword ? "Hide Passcode" : "Show Passcode"}
+              >
+                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
             </div>
 
             {authError && (
