@@ -52,7 +52,25 @@ type ChatMessage = {
   sender: "you" | "stranger" | "system";
   text: string;
   timestamp: string;
+  warning?: string;
+  filtered?: boolean;
 };
+
+// Helper to convert 2-letter ISO Country Code to Emoji Flag and localized Country Name
+function getCountryDetails(countryCode?: string | null): { flag: string; name: string } | null {
+  if (!countryCode || countryCode.length !== 2) return null;
+  const code = countryCode.toUpperCase();
+  if (code === "XX" || code === "T1" || code === "UN" || code === "UNKNOWN") return null;
+  try {
+    const flag = code
+      .replace(/./g, (char) => String.fromCodePoint(char.charCodeAt(0) + 127397));
+    const regionNames = new Intl.DisplayNames(["en"], { type: "region" });
+    const name = regionNames.of(code) || code;
+    return { flag, name };
+  } catch {
+    return null;
+  }
+}
 
 type ConnectionStatus = "idle" | "searching" | "connected" | "disconnected";
 
@@ -312,6 +330,7 @@ export default function Home() {
   const [isStrangerTyping, setIsStrangerTyping] = useState(false);
   const [onlineCount, setOnlineCount] = useState("1");
   const [strangerGender, setStrangerGender] = useState<Gender>(null);
+  const [strangerCountry, setStrangerCountry] = useState<string | null>(null);
 
   // Keep isMicMutedRef and hardware audio tracks always strictly in sync
   useEffect(() => {
@@ -965,6 +984,7 @@ export default function Home() {
       remoteVideoRef.current.srcObject = null;
     }
     setStrangerGender(null);
+    setStrangerCountry(null);
     hasAutoReportedRef.current = false;
   }, []);
 
@@ -1084,23 +1104,27 @@ export default function Home() {
     initPeer();
 
     // 4. Socket Matchmaking Events
-    socket.on("match-found", async ({ partnerPeerId, partnerGender, initiator, mode }: any) => {
-      console.log(`Match Found with Peer: ${partnerPeerId}, Initiator: ${initiator}, Mode: ${mode}`);
+    socket.on("match-found", async ({ partnerPeerId, partnerGender, partnerCountry, initiator, mode }: any) => {
+      console.log(`Match Found with Peer: ${partnerPeerId}, Initiator: ${initiator}, Mode: ${mode}, Country: ${partnerCountry}`);
       currentPartnerPeerIdRef.current = partnerPeerId;
       cleanupCall();
       setStatus("connected");
       setStrangerGender(partnerGender);
+      setStrangerCountry(partnerCountry || null);
       setRemoteMicroPreview(null);
       setIsRemoteVideoPlaying(false);
       setInputMessage("");
       setIsStrangerTyping(false);
       playAudioSFX("match", isSoundMutedRef.current);
 
+      const geo = getCountryDetails(partnerCountry);
+      const countrySnippet = geo ? ` from ${geo.flag} ${geo.name}` : "";
+
       // Clear previous chats on new connection in both Video & Text modes
       const connectMsg: ChatMessage = {
         id: "sys-" + Date.now() + "-" + Math.random().toString(36).slice(2, 6),
         sender: "system",
-        text: `Connected with a stranger in ${mode === "text" ? "Text" : "Video"} Chat! Say hi.`,
+        text: `Connected with a stranger${countrySnippet} in ${mode === "text" ? "Text" : "Video"} Chat! Say hi.`,
         timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
       };
       setMessages([connectMsg]);
@@ -2325,7 +2349,7 @@ export default function Home() {
                 {isSwappedFeeds
                   ? "You (Full Camera View)"
                   : status === "connected" && strangerGender
-                    ? `Stranger (${strangerGender === "female" ? "Female" : "Male"})`
+                    ? `Stranger (${strangerGender === "female" ? "Female" : "Male"})${getCountryDetails(strangerCountry) ? ` ${getCountryDetails(strangerCountry)?.flag}` : ""}`
                     : `Stranger (${chatMode === "text" ? "Text Mode" : "Video Mode"})`}
               </span>
             </div>
@@ -2421,6 +2445,7 @@ export default function Home() {
                 <div className="space-y-1">
                   <p className="text-zinc-100 font-bold text-base tracking-tight">
                     Chatting with {strangerGender ? (strangerGender === "female" ? "Female Stranger" : "Male Stranger") : "Stranger"}
+                    {getCountryDetails(strangerCountry) ? ` ${getCountryDetails(strangerCountry)?.flag} (${getCountryDetails(strangerCountry)?.name})` : ""}
                   </p>
                   <p className="text-zinc-400 text-xs max-w-xs">
                     You are connected via P2P Encrypted Text. Type in the chat box on the right to talk!

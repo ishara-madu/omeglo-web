@@ -975,6 +975,7 @@ export class Matchmaker {
       this.emit(socketId, "match-found", {
         partnerPeerId: match.peerId,
         partnerGender: match.gender,
+        partnerCountry: matchGeo.country || "LK",
         initiator: true,
         mode: chatMode,
       });
@@ -982,6 +983,7 @@ export class Matchmaker {
       this.emit(match.socketId, "match-found", {
         partnerPeerId: peerId,
         partnerGender: currentUser.gender,
+        partnerCountry: userGeo.country || "LK",
         initiator: false,
         mode: chatMode,
       });
