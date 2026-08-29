@@ -40,7 +40,6 @@ import {
 } from "lucide-react";
 import { getBrowserFingerprint } from "@/lib/fingerprint";
 import { filterMessage } from "@/lib/moderation/regexFilter";
-import { initNsfwDetector, checkVideoFrame } from "@/lib/moderation/nsfwDetector";
 import { initToxicityDetector, checkTextToxicity } from "@/lib/moderation/toxicityDetector";
 
 type ChatMessage = {
@@ -1008,8 +1007,8 @@ export default function Home() {
 
   // Initialize Socket.io and PeerJS
   useEffect(() => {
-    // Pre-warm AI moderation models in background (Zero-delay readiness)
-    initNsfwDetector().catch(() => {});
+    // Pre-warm text toxicity AI moderation model in background
+    initToxicityDetector().catch(() => {});
 
     // 1. Check localStorage for preferences
     try {
@@ -1463,78 +1462,7 @@ export default function Home() {
     return () => clearTimeout(timer);
   }, [status, autoNextCountdown, handleNext]);
 
-  // Real-time AI NSFW & Nudity Shield (Active Video Stream Scanner)
-  useEffect(() => {
-    if (status !== "connected" || chatMode !== "video") {
-      setIsNsfwBlurred(false);
-      return;
-    }
 
-    // Lazy load NSFW model in background (0 KB initial SEO impact)
-    initNsfwDetector().catch(() => {});
-    initToxicityDetector().catch(() => {});
-
-    const interval = setInterval(async () => {
-      if (hasAutoReportedRef.current || status !== "connected") return;
-
-      // 1. Scan remote stranger video feed
-      if (remoteVideoRef.current && status === "connected") {
-        const remoteNsfw = await checkVideoFrame(remoteVideoRef.current);
-        if (remoteNsfw.isNsfw && !hasAutoReportedRef.current) {
-          hasAutoReportedRef.current = true; // ATOMIC SINGLE REPORT LOCK
-          clearInterval(interval); // STOP SCANNER IMMEDIATELY
-
-          setIsNsfwBlurred(true);
-          showModerationAlert(
-            `⚠️ AI Auto-Shield: Inappropriate content detected. Stranger reported & quarantined.`,
-            "error"
-          );
-
-          // Auto-report stranger EXACTLY ONCE to D1
-          socketRef.current?.emit("report-partner", {
-            targetPeerId: currentPartnerPeerIdRef.current,
-            reason: "nudity",
-            details: `AI Auto-Detected NSFW Stream (${remoteNsfw.topCategory}: ${(remoteNsfw.probability * 100).toFixed(0)}%)`,
-          });
-
-          // Disconnect & Skip after brief blur transition
-          setTimeout(() => {
-            setIsNsfwBlurred(false);
-            handleNext();
-          }, 1400);
-          return;
-        }
-      }
-
-      // 2. Scan local video feed (Strict Zero-Tolerance Auto-Quarantine)
-      if (localVideoRef.current && status === "connected") {
-        const localNsfw = await checkVideoFrame(localVideoRef.current);
-        if (localNsfw.isNsfw && !hasAutoReportedRef.current) {
-          hasAutoReportedRef.current = true; // ATOMIC SINGLE REPORT LOCK
-          clearInterval(interval); // STOP SCANNER IMMEDIATELY
-
-          showModerationAlert(
-            "⚠️ Camera Violation: Inappropriate content detected on camera. You have been quarantined.",
-            "error"
-          );
-
-          // Auto-report local violator EXACTLY ONCE to D1 for immediate quarantine
-          socketRef.current?.emit("report-self", {
-            reason: "nudity",
-            details: `AI Auto-Detected Nudity on Camera (${localNsfw.topCategory}: ${(localNsfw.probability * 100).toFixed(0)}%)`,
-          });
-
-          // Disconnect local violator immediately
-          setTimeout(() => {
-            handleStop();
-          }, 1200);
-          return;
-        }
-      }
-    }, 2000);
-
-    return () => clearInterval(interval);
-  }, [status, chatMode, handleNext, handleStop, showModerationAlert]);
 
   // Handle Mic Mute Toggle (Ensures complete hardware sync with state)
   const toggleMic = () => {
