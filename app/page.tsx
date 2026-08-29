@@ -1245,11 +1245,16 @@ export default function Home() {
       const clientY = "touches" in e ? e.touches[0].clientY : e.clientY;
 
       if (isResizing) {
+        // Calculate screen-adaptive min and max width constraints
+        const isMobile = window.innerWidth < 640;
+        const minW = isMobile ? 80 : 130;
+        const maxW = isMobile ? 220 : 360;
+
         // Dragging top-left corner resize handle outwards increases width
         const deltaX = resizeStartRef.current.startX - clientX;
         const deltaY = resizeStartRef.current.startY - clientY;
         const delta = Math.max(deltaX, deltaY);
-        const newWidth = Math.max(90, Math.min(320, resizeStartRef.current.initialWidth + delta));
+        const newWidth = Math.max(minW, Math.min(maxW, resizeStartRef.current.initialWidth + delta));
         setPipWidth(newWidth);
         return;
       }
@@ -2638,16 +2643,15 @@ export default function Home() {
                   </div>
                 </div>
 
-                {/* Fallback View if Permission Pending on Local Cam */}
+                {/* Fallback View if Permission Pending on Local Cam (Clean White Centered Button, Zero Icon) */}
                 {!isSwappedFeeds && (!localStream || hasCameraPermission === false) && (
-                  <div className="relative z-10 flex-1 flex flex-col items-center justify-center my-1 pointer-events-none">
+                  <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none p-2">
                     <button
                       type="button"
                       onClick={() => setShowPermissionModal(true)}
-                      className="pointer-events-auto flex flex-col items-center gap-1.5 cursor-pointer text-amber-400 hover:text-amber-300 hover:scale-105 transition-all p-1"
+                      className="pointer-events-auto px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 text-white font-medium text-[10px] sm:text-xs tracking-tight shadow-md backdrop-blur-md hover:scale-105 active:scale-95 transition-all cursor-pointer select-none text-center"
                     >
-                      <AlertTriangle className="w-6 h-6 sm:w-7 sm:h-7 text-amber-400 stroke-[1.75]" />
-                      <span className="text-[9px] sm:text-[10px] font-semibold text-amber-300">Enable Cam</span>
+                      Enable Cam
                     </button>
                   </div>
                 )}
