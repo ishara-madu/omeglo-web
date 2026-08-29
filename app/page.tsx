@@ -390,6 +390,20 @@ export default function Home() {
   // Match Preference / Looking For Filter (Any / Female / Male)
   const [matchPreference, setMatchPreference] = useState<MatchPreference>("any");
 
+  const userGenderRef = useRef(userGender);
+  useEffect(() => {
+    userGenderRef.current = userGender;
+  }, [userGender]);
+
+  const matchPreferenceRef = useRef(matchPreference);
+  useEffect(() => {
+    matchPreferenceRef.current = matchPreference;
+  }, [matchPreference]);
+
+  const pendingStartMatchRef = useRef(false);
+  const isInitializingPeerRef = useRef(false);
+  const initPeerRef = useRef<() => void>(() => {});
+
   // Next Button Spam Protection & Search Lock State
   const [isNextDisabled, setIsNextDisabled] = useState(false);
   const nextCooldownRef = useRef<number>(0);
@@ -1060,64 +1074,165 @@ export default function Home() {
       setStatus("searching");
     });
 
-    // 3. Initialize PeerJS (WebRTC with Google STUN)
-    let peerInstance: any = null;
+    // 3. Initialize PeerJS (WebRTC with Google & Twilio STUN with Auto-Healing Reconnection)
+    let isCleanedUp = false;
 
     const initPeer = async () => {
+      if (isInitializingPeerRef.current || isCleanedUp) return;
+      isInitializingPeerRef.current = true;
+
+      try {
+        if (peerRef.current && !peerRef.current.destroyed) {
+          try {
+            peerRef.current.destroy();
+          } catch {}
+        }
+      } catch (e) {
+        console.error("Error cleaning up previous peer instance:", e);
+      }
+
       const { default: Peer } = await import("peerjs");
+      if (isCleanedUp) return;
 
-      const peer = new Peer({
-        config: {
-          iceServers: [
-            { urls: "stun:stun.l.google.com:19302" },
-            { urls: "stun:stun1.l.google.com:19302" },
-            { urls: "stun:stun2.l.google.com:19302" },
-          ],
-        },
-      });
-
-      peer.on("open", (id) => {
-        console.log("My PeerJS ID:", id);
-        myPeerIdRef.current = id;
-      });
-
-      // Handle Incoming Call from Stranger (In Video Mode Only)
-      peer.on("call", async (incomingCall) => {
-        // Strictly reject incoming video calls if current user is in Text Mode
-        if (chatModeRef.current === "text") {
-          console.warn("Rejected incoming video call: current mode is Text Only");
-          incomingCall.close();
-          return;
-        }
-
-        const stream = localStreamRef.current || (await initLocalStream());
-        if (stream) {
-          incomingCall.answer(stream);
-        } else {
-          incomingCall.answer();
-        }
-
-        incomingCall.on("stream", (incomingRemoteStream) => {
-          setRemoteStream(incomingRemoteStream);
+      try {
+        const peer = new Peer({
+          config: {
+            iceServers: [
+              { urls: "stun:stun.l.google.com:19302" },
+              { urls: "stun:stun1.l.google.com:19302" },
+              { urls: "stun:stun2.l.google.com:19302" },
+              { urls: "stun:stun3.l.google.com:19302" },
+              { urls: "stun:stun4.l.google.com:19302" },
+              { urls: "stun:global.stun.twilio.com:3478" },
+            ],
+          },
         });
 
-        applyLowLatencyNetworkOptimizations(incomingCall);
-        activeCallRef.current = incomingCall;
-      });
+        peer.on("open", (id) => {
+          console.log("My PeerJS ID established:", id);
+          myPeerIdRef.current = id;
+          isInitializingPeerRef.current = false;
 
-      // Handle Incoming Text Chat DataConnection
-      peer.on("connection", (conn) => {
-        setupDataConnection(conn);
-      });
+          // If user clicked start/next while peer was connecting, start matchmaking immediately!
+          if (pendingStartMatchRef.current) {
+            pendingStartMatchRef.current = false;
+            cleanupCall();
+            setStatus("searching");
+            const mode = chatModeRef.current;
+            const modeText = mode === "text" ? "text partner" : "video stranger";
+            const pref = matchPreferenceRef.current;
+            const targetText = pref === "female" ? `Looking for a female ${modeText}...` : pref === "male" ? `Looking for a male ${modeText}...` : `Looking for a random ${modeText}...`;
+            addSystemMessage(targetText);
 
-      peer.on("error", (err) => {
-        console.error("PeerJS Error:", err);
-      });
+            socketRef.current?.emit("find-match", {
+              peerId: id,
+              gender: userGenderRef.current || "male",
+              lookingFor: matchPreferenceRef.current,
+              mode: chatModeRef.current,
+              fingerprint: getBrowserFingerprint(),
+            });
+          }
+        });
 
-      peerRef.current = peer;
-      peerInstance = peer;
+        peer.on("disconnected", () => {
+          console.warn("PeerJS signaling disconnected. Auto-reconnecting...");
+          myPeerIdRef.current = null;
+          isInitializingPeerRef.current = false;
+          if (!peer.destroyed && !isCleanedUp) {
+            try {
+              peer.reconnect();
+            } catch {
+              setTimeout(() => {
+                if (!isCleanedUp) initPeer();
+              }, 1000);
+            }
+          } else if (!isCleanedUp) {
+            setTimeout(() => {
+              if (!isCleanedUp) initPeer();
+            }, 1000);
+          }
+        });
+
+        peer.on("close", () => {
+          console.warn("PeerJS connection closed. Auto-recreating...");
+          myPeerIdRef.current = null;
+          isInitializingPeerRef.current = false;
+          if (!isCleanedUp) {
+            setTimeout(() => {
+              if (!isCleanedUp) initPeer();
+            }, 1000);
+          }
+        });
+
+        peer.on("error", (err: any) => {
+          console.error("PeerJS Error:", err);
+          isInitializingPeerRef.current = false;
+          if (
+            err?.type === "network" ||
+            err?.type === "server-error" ||
+            err?.type === "socket-error" ||
+            err?.type === "socket-closed" ||
+            err?.type === "disconnected"
+          ) {
+            myPeerIdRef.current = null;
+            if (!peer.destroyed && !isCleanedUp) {
+              try {
+                peer.reconnect();
+              } catch {
+                setTimeout(() => {
+                  if (!isCleanedUp) initPeer();
+                }, 1500);
+              }
+            } else if (!isCleanedUp) {
+              setTimeout(() => {
+                if (!isCleanedUp) initPeer();
+              }, 1500);
+            }
+          }
+        });
+
+        // Handle Incoming Call from Stranger (In Video Mode Only)
+        peer.on("call", async (incomingCall) => {
+          // Strictly reject incoming video calls if current user is in Text Mode
+          if (chatModeRef.current === "text") {
+            console.warn("Rejected incoming video call: current mode is Text Only");
+            incomingCall.close();
+            return;
+          }
+
+          const stream = localStreamRef.current || (await initLocalStream());
+          if (stream) {
+            incomingCall.answer(stream);
+          } else {
+            incomingCall.answer();
+          }
+
+          incomingCall.on("stream", (incomingRemoteStream) => {
+            setRemoteStream(incomingRemoteStream);
+          });
+
+          applyLowLatencyNetworkOptimizations(incomingCall);
+          activeCallRef.current = incomingCall;
+        });
+
+        // Handle Incoming Text Chat DataConnection
+        peer.on("connection", (conn) => {
+          setupDataConnection(conn);
+        });
+
+        peerRef.current = peer;
+      } catch (err) {
+        console.error("Failed to initialize PeerJS:", err);
+        isInitializingPeerRef.current = false;
+        if (!isCleanedUp) {
+          setTimeout(() => {
+            if (!isCleanedUp) initPeer();
+          }, 2000);
+        }
+      }
     };
 
+    initPeerRef.current = initPeer;
     initPeer();
 
     // 4. Socket Matchmaking Events
@@ -1187,9 +1302,12 @@ export default function Home() {
     });
 
     return () => {
+      isCleanedUp = true;
       socket.disconnect();
-      if (peerInstance) {
-        peerInstance.destroy();
+      if (peerRef.current) {
+        try {
+          peerRef.current.destroy();
+        } catch {}
       }
       if (localStreamRef.current) {
         localStreamRef.current.getTracks().forEach((track) => track.stop());
@@ -1411,7 +1529,20 @@ export default function Home() {
     }
 
     if (!myPeerIdRef.current) {
-      addSystemMessage("Connecting to peer network... Please wait.");
+      pendingStartMatchRef.current = true;
+      cleanupCall();
+      setStatus("searching");
+      addSystemMessage("Connecting to peer network... Matchmaking will start automatically.");
+
+      if (!peerRef.current || peerRef.current.destroyed) {
+        initPeerRef.current?.();
+      } else if (peerRef.current.disconnected) {
+        try {
+          peerRef.current.reconnect();
+        } catch {
+          initPeerRef.current?.();
+        }
+      }
       return;
     }
 
@@ -1430,6 +1561,7 @@ export default function Home() {
 
   // Handle Stop Matchmaking
   const handleStop = useCallback(() => {
+    pendingStartMatchRef.current = false;
     setAutoNextCountdown(null);
     if (status === "idle") return;
     socketRef.current?.emit("leave-chat");
@@ -1481,6 +1613,18 @@ export default function Home() {
         mode: chatMode,
         fingerprint: getBrowserFingerprint(),
       });
+    } else {
+      pendingStartMatchRef.current = true;
+      addSystemMessage("Connecting to peer network... Matchmaking will start automatically.");
+      if (!peerRef.current || peerRef.current.destroyed) {
+        initPeerRef.current?.();
+      } else if (peerRef.current.disconnected) {
+        try {
+          peerRef.current.reconnect();
+        } catch {
+          initPeerRef.current?.();
+        }
+      }
     }
   }, [addSystemMessage, assessNetworkQuality, chatMode, cleanupCall, initLocalStream, matchPreference, status, userGender]);
 
