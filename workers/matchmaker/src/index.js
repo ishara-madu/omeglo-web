@@ -362,6 +362,128 @@ export class Matchmaker {
         }
       }
 
+      // 9. Action: Batch Delete Reports
+      if (url.pathname === "/api/admin/batch-delete-reports" && request.method === "POST") {
+        try {
+          const body = await request.json();
+          const reportIds = body?.reportIds || [];
+          if (this.env.DB && Array.isArray(reportIds) && reportIds.length > 0) {
+            const placeholders = reportIds.map(() => "?").join(",");
+            await this.env.DB.prepare(`DELETE FROM reports WHERE id IN (${placeholders})`)
+              .bind(...reportIds)
+              .run();
+          }
+          return new Response(JSON.stringify({ success: true, message: `${reportIds.length} reports deleted successfully.` }), {
+            headers: corsHeaders,
+          });
+        } catch (err) {
+          return new Response(JSON.stringify({ success: false, error: err.message }), {
+            status: 500,
+            headers: corsHeaders,
+          });
+        }
+      }
+
+      // 10. Action: Batch Dismiss Reports
+      if (url.pathname === "/api/admin/batch-dismiss-reports" && request.method === "POST") {
+        try {
+          const body = await request.json();
+          const reportIds = body?.reportIds || [];
+          if (this.env.DB && Array.isArray(reportIds) && reportIds.length > 0) {
+            const placeholders = reportIds.map(() => "?").join(",");
+            await this.env.DB.prepare(`UPDATE reports SET status = 'dismissed' WHERE id IN (${placeholders})`)
+              .bind(...reportIds)
+              .run();
+          }
+          return new Response(JSON.stringify({ success: true, message: `${reportIds.length} reports dismissed.` }), {
+            headers: corsHeaders,
+          });
+        } catch (err) {
+          return new Response(JSON.stringify({ success: false, error: err.message }), {
+            status: 500,
+            headers: corsHeaders,
+          });
+        }
+      }
+
+      // 11. Action: Delete / Remove Ban
+      if (url.pathname === "/api/admin/delete-ban" && request.method === "POST") {
+        try {
+          const body = await request.json();
+          const { banId, identifier } = body || {};
+          if (this.env.DB) {
+            if (banId) {
+              await this.env.DB.prepare("DELETE FROM banned_users WHERE id = ?").bind(banId).run();
+            } else if (identifier) {
+              await this.env.DB.prepare("DELETE FROM banned_users WHERE identifier = ?").bind(identifier).run();
+            }
+            if (identifier) {
+              await this.env.DB.prepare("UPDATE user_reputation SET is_quarantined = 0, quarantined_until = NULL, report_count = 0 WHERE identifier = ?")
+                .bind(identifier)
+                .run();
+            }
+          }
+          return new Response(JSON.stringify({ success: true, message: "Ban removed successfully." }), {
+            headers: corsHeaders,
+          });
+        } catch (err) {
+          return new Response(JSON.stringify({ success: false, error: err.message }), {
+            status: 500,
+            headers: corsHeaders,
+          });
+        }
+      }
+
+      // 12. Action: Delete / Remove Quarantine Record
+      if (url.pathname === "/api/admin/delete-quarantine" && request.method === "POST") {
+        try {
+          const body = await request.json();
+          const { id, identifier } = body || {};
+          if (this.env.DB) {
+            if (id) {
+              await this.env.DB.prepare("DELETE FROM user_reputation WHERE id = ?").bind(id).run();
+            } else if (identifier) {
+              await this.env.DB.prepare("DELETE FROM user_reputation WHERE identifier = ?").bind(identifier).run();
+            }
+          }
+          return new Response(JSON.stringify({ success: true, message: "Quarantine record deleted." }), {
+            headers: corsHeaders,
+          });
+        } catch (err) {
+          return new Response(JSON.stringify({ success: false, error: err.message }), {
+            status: 500,
+            headers: corsHeaders,
+          });
+        }
+      }
+
+      // 13. Action: Purge Reports by Status or All
+      if (url.pathname === "/api/admin/purge-reports" && request.method === "POST") {
+        try {
+          const body = await request.json();
+          const filter = body?.filter || "dismissed"; // 'all' | 'dismissed' | 'resolved'
+          let deletedCount = 0;
+          if (this.env.DB) {
+            let query = "DELETE FROM reports WHERE status = 'dismissed'";
+            if (filter === "all") {
+              query = "DELETE FROM reports";
+            } else if (filter === "resolved") {
+              query = "DELETE FROM reports WHERE status = 'resolved'";
+            }
+            const res = await this.env.DB.prepare(query).run();
+            deletedCount = res.meta?.changes || 0;
+          }
+          return new Response(JSON.stringify({ success: true, message: `Purged ${deletedCount} reports.` }), {
+            headers: corsHeaders,
+          });
+        } catch (err) {
+          return new Response(JSON.stringify({ success: false, error: err.message }), {
+            status: 500,
+            headers: corsHeaders,
+          });
+        }
+      }
+
       // 8. Action: Manual 90-Day Cleanup Trigger
       if (url.pathname === "/api/admin/cleanup" && request.method === "POST") {
         try {

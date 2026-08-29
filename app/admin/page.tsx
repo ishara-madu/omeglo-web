@@ -25,6 +25,9 @@ import {
   Eye,
   X,
   Check,
+  CheckSquare,
+  Square,
+  Layers,
 } from "lucide-react";
 
 const BACKEND_URL =
@@ -103,6 +106,10 @@ export default function AdminPage() {
   const [reports, setReports] = useState<ReportItem[]>([]);
   const [quarantineList, setQuarantineList] = useState<QuarantineItem[]>([]);
   const [bansList, setBansList] = useState<BanItem[]>([]);
+
+  // Selection state for Batch Actions
+  const [selectedReportIds, setSelectedReportIds] = useState<Set<string>>(new Set());
+  const [selectedBanIds, setSelectedBanIds] = useState<Set<string>>(new Set());
 
   // Search & Filter
   const [searchQuery, setSearchQuery] = useState<string>("");
@@ -190,7 +197,9 @@ export default function AdminPage() {
 
   useEffect(() => {
     loadData();
-  }, [loadData]);
+    setSelectedReportIds(new Set());
+    setSelectedBanIds(new Set());
+  }, [loadData, activeTab]);
 
   // Handle Login PIN submission
   const handleLogin = async (e: React.FormEvent) => {
@@ -236,16 +245,15 @@ export default function AdminPage() {
     setPinInput("");
   };
 
-  // Actions
+  // =========================================================================
+  // SINGLE ITEM ACTIONS
+  // =========================================================================
   const handleReleaseUser = async (params: {
     identifier?: string;
     reportId?: string;
     deviceId?: string;
     ip?: string;
   }) => {
-    const targetLabel = params.identifier || params.deviceId || params.ip || params.reportId;
-    if (!confirm(`Release ${targetLabel} back to Clean Matchmaking Pool?`)) return;
-
     try {
       const data = await apiFetch("/api/admin/unban", {
         method: "POST",
@@ -253,7 +261,6 @@ export default function AdminPage() {
       });
       if (data.success) {
         showToast(data.message || "User released to Clean Pool.");
-        // Optimistically update local reports & quarantine
         if (params.reportId) {
           setReports((prev) =>
             prev.map((r) => (r.id === params.reportId ? { ...r, status: "resolved" } : r))
@@ -274,7 +281,7 @@ export default function AdminPage() {
         body: JSON.stringify({ reportId, releaseUser: true, identifier }),
       });
       if (data.success) {
-        showToast("Report dismissed successfully.");
+        showToast("Report dismissed.");
         setReports((prev) =>
           prev.map((r) => (r.id === reportId ? { ...r, status: "dismissed" } : r))
         );
@@ -287,7 +294,6 @@ export default function AdminPage() {
   };
 
   const handleDeleteReport = async (reportId: string) => {
-    if (!confirm("Permanently delete this report from database?")) return;
     try {
       const data = await apiFetch("/api/admin/delete-report", {
         method: "POST",
@@ -296,11 +302,118 @@ export default function AdminPage() {
       if (data.success) {
         showToast("Report permanently deleted.");
         setReports((prev) => prev.filter((r) => r.id !== reportId));
-        loadData();
+        setSelectedReportIds((prev) => {
+          const next = new Set(prev);
+          next.delete(reportId);
+          return next;
+        });
         setSelectedReport(null);
       }
     } catch (err: any) {
       showToast(err.message, "error");
+    }
+  };
+
+  const handleDeleteBan = async (banId: string, identifier?: string) => {
+    try {
+      const data = await apiFetch("/api/admin/delete-ban", {
+        method: "POST",
+        body: JSON.stringify({ banId, identifier }),
+      });
+      if (data.success) {
+        showToast("Ban deleted and user unbanned.");
+        setBansList((prev) => prev.filter((b) => b.id !== banId));
+        loadData();
+      }
+    } catch (err: any) {
+      showToast(err.message, "error");
+    }
+  };
+
+  const handleDeleteQuarantine = async (id: string, identifier: string) => {
+    try {
+      const data = await apiFetch("/api/admin/delete-quarantine", {
+        method: "POST",
+        body: JSON.stringify({ id, identifier }),
+      });
+      if (data.success) {
+        showToast("Quarantine record deleted.");
+        setQuarantineList((prev) => prev.filter((q) => q.id !== id));
+        loadData();
+      }
+    } catch (err: any) {
+      showToast(err.message, "error");
+    }
+  };
+
+  // =========================================================================
+  // BATCH & BULK ACTIONS
+  // =========================================================================
+  const handleBatchDeleteReports = async () => {
+    const ids = Array.from(selectedReportIds);
+    if (ids.length === 0) return;
+    if (!confirm(`Permanently delete ${ids.length} selected reports?`)) return;
+
+    setIsLoading(true);
+    try {
+      const data = await apiFetch("/api/admin/batch-delete-reports", {
+        method: "POST",
+        body: JSON.stringify({ reportIds: ids }),
+      });
+      if (data.success) {
+        showToast(data.message || `${ids.length} reports deleted.`);
+        setReports((prev) => prev.filter((r) => !selectedReportIds.has(r.id)));
+        setSelectedReportIds(new Set());
+      }
+    } catch (err: any) {
+      showToast(err.message, "error");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleBatchDismissReports = async () => {
+    const ids = Array.from(selectedReportIds);
+    if (ids.length === 0) return;
+
+    setIsLoading(true);
+    try {
+      const data = await apiFetch("/api/admin/batch-dismiss-reports", {
+        method: "POST",
+        body: JSON.stringify({ reportIds: ids }),
+      });
+      if (data.success) {
+        showToast(data.message || `${ids.length} reports dismissed.`);
+        setReports((prev) =>
+          prev.map((r) => (selectedReportIds.has(r.id) ? { ...r, status: "dismissed" } : r))
+        );
+        setSelectedReportIds(new Set());
+      }
+    } catch (err: any) {
+      showToast(err.message, "error");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handlePurgeReports = async (filter: "dismissed" | "resolved" | "all") => {
+    const label = filter === "all" ? "ALL" : filter.toUpperCase();
+    if (!confirm(`Are you sure you want to permanently purge ${label} reports from database?`)) return;
+
+    setIsLoading(true);
+    try {
+      const data = await apiFetch("/api/admin/purge-reports", {
+        method: "POST",
+        body: JSON.stringify({ filter }),
+      });
+      if (data.success) {
+        showToast(data.message);
+        loadData();
+      }
+    } catch (err: any) {
+      showToast(err.message, "error");
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -365,13 +478,30 @@ export default function AdminPage() {
     return matchesReason && matchesStatus && matchesSearch;
   });
 
+  // Toggle selection
+  const toggleSelectReport = (id: string) => {
+    setSelectedReportIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAllReports = () => {
+    if (selectedReportIds.size === filteredReports.length) {
+      setSelectedReportIds(new Set());
+    } else {
+      setSelectedReportIds(new Set(filteredReports.map((r) => r.id)));
+    }
+  };
+
   // =========================================================================
   // 1. PIN Authentication Gate UI (If not authenticated)
   // =========================================================================
   if (!isAuthenticated) {
     return (
       <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center p-4 relative overflow-hidden">
-        {/* Glow backdrop */}
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-white/[0.02] rounded-full blur-3xl pointer-events-none" />
 
         <div className="w-full max-w-sm bg-zinc-900/90 border border-zinc-800 backdrop-blur-xl rounded-3xl p-7 shadow-2xl relative z-10 flex flex-col items-center text-center">
@@ -430,7 +560,7 @@ export default function AdminPage() {
   // 2. Main Admin Dashboard Portal UI
   // =========================================================================
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col font-sans">
+    <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col font-sans pb-24">
       {/* FLOATING TOAST NOTIFICATION */}
       {toastMessage && (
         <div
@@ -446,6 +576,40 @@ export default function AdminPage() {
             <CheckCircle className="w-4 h-4 text-emerald-400" />
           )}
           <span>{toastMessage.text}</span>
+        </div>
+      )}
+
+      {/* STICKY BULK ACTION BAR (When 1+ reports are selected) */}
+      {selectedReportIds.size > 0 && activeTab === "reports" && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 bg-zinc-900/95 border border-zinc-700 shadow-2xl rounded-2xl px-5 py-3 flex items-center gap-3 backdrop-blur-xl animate-in slide-in-from-bottom-5">
+          <div className="flex items-center gap-2 text-xs font-bold text-white pr-2 border-r border-zinc-700">
+            <CheckSquare className="w-4 h-4 text-emerald-400" />
+            <span>{selectedReportIds.size} Selected</span>
+          </div>
+
+          <button
+            onClick={handleBatchDeleteReports}
+            className="px-3.5 py-1.5 rounded-xl bg-red-600 hover:bg-red-500 text-white text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm cursor-pointer"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+            <span>Delete Selected</span>
+          </button>
+
+          <button
+            onClick={handleBatchDismissReports}
+            className="px-3.5 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer"
+          >
+            <Check className="w-3.5 h-3.5 text-emerald-400" />
+            <span>Dismiss Selected</span>
+          </button>
+
+          <button
+            onClick={() => setSelectedReportIds(new Set())}
+            className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors cursor-pointer ml-1"
+            title="Deselect All"
+          >
+            <X className="w-4 h-4" />
+          </button>
         </div>
       )}
 
@@ -498,12 +662,12 @@ export default function AdminPage() {
             }`}
           >
             <Activity className="w-3.5 h-3.5" />
-            <span>Live Overview</span>
+            <span>Overview</span>
           </button>
 
           <button
             onClick={() => setActiveTab("reports")}
-            className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer flex items-center gap-2 relative ${
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer flex items-center gap-2 ${
               activeTab === "reports"
                 ? "bg-white text-zinc-950 shadow-xs"
                 : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900"
@@ -511,8 +675,10 @@ export default function AdminPage() {
           >
             <ShieldAlert className="w-3.5 h-3.5" />
             <span>Reports Feed</span>
-            {overview && overview.todayReports > 0 && (
-              <span className="w-2 h-2 rounded-full bg-red-500 absolute top-1 right-1" />
+            {reports.length > 0 && (
+              <span className="px-1.5 py-0.2 rounded-full bg-red-500 text-white text-[10px] font-bold font-mono">
+                {reports.length}
+              </span>
             )}
           </button>
 
@@ -525,7 +691,12 @@ export default function AdminPage() {
             }`}
           >
             <Clock className="w-3.5 h-3.5" />
-            <span>Toxic Quarantine Pool</span>
+            <span>Quarantine Pool</span>
+            {quarantineList.length > 0 && (
+              <span className="px-1.5 py-0.2 rounded-full bg-purple-500 text-white text-[10px] font-bold font-mono">
+                {quarantineList.length}
+              </span>
+            )}
           </button>
 
           <button
@@ -537,7 +708,7 @@ export default function AdminPage() {
             }`}
           >
             <Ban className="w-3.5 h-3.5" />
-            <span>Permanent Bans</span>
+            <span>Hard Bans</span>
           </button>
 
           <button
@@ -549,54 +720,54 @@ export default function AdminPage() {
             }`}
           >
             <Database className="w-3.5 h-3.5" />
-            <span>Database Tools</span>
+            <span>Maintenance</span>
           </button>
         </div>
       </div>
 
       {/* MAIN CONTENT AREA */}
-      <main className="flex-1 p-4 sm:p-8 max-w-7xl w-full mx-auto">
+      <main className="flex-1 px-4 sm:px-8 py-6 max-w-7xl w-full mx-auto space-y-6">
         {/* =========================================================================
-            TAB 1: LIVE OVERVIEW
+            TAB 1: OVERVIEW & LIVE METRICS
             ========================================================================= */}
         {activeTab === "overview" && (
           <div className="space-y-6 animate-in fade-in duration-200">
-            {/* Top Stat Cards Grid */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-              <div className="bg-zinc-900/70 border border-zinc-800/80 rounded-2xl p-5 shadow-xs">
+            {/* Stat Cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="bg-zinc-900/60 border border-zinc-800/80 rounded-3xl p-5 shadow-xs">
                 <div className="flex items-center justify-between text-zinc-400 mb-2">
                   <span className="text-xs font-medium uppercase tracking-wider">Total Reports</span>
-                  <ShieldAlert className="w-4 h-4 text-amber-400" />
+                  <ShieldAlert className="w-4 h-4 text-red-400" />
                 </div>
                 <div className="text-2xl sm:text-3xl font-black text-white font-mono">
                   {overview?.totalReports ?? 0}
                 </div>
-                <div className="text-[11px] text-zinc-500 mt-1">Recorded in Cloudflare D1</div>
+                <div className="text-[11px] text-zinc-500 mt-1">Logged in D1 Database</div>
               </div>
 
-              <div className="bg-zinc-900/70 border border-zinc-800/80 rounded-2xl p-5 shadow-xs">
+              <div className="bg-zinc-900/60 border border-zinc-800/80 rounded-3xl p-5 shadow-xs">
                 <div className="flex items-center justify-between text-zinc-400 mb-2">
-                  <span className="text-xs font-medium uppercase tracking-wider">In Quarantine</span>
+                  <span className="text-xs font-medium uppercase tracking-wider">Active Quarantined</span>
                   <Clock className="w-4 h-4 text-purple-400" />
                 </div>
                 <div className="text-2xl sm:text-3xl font-black text-purple-300 font-mono">
                   {overview?.activeQuarantined ?? 0}
                 </div>
-                <div className="text-[11px] text-zinc-500 mt-1">Toxic shadow pool users</div>
+                <div className="text-[11px] text-zinc-500 mt-1">Restricted to toxic matching</div>
               </div>
 
-              <div className="bg-zinc-900/70 border border-zinc-800/80 rounded-2xl p-5 shadow-xs">
+              <div className="bg-zinc-900/60 border border-zinc-800/80 rounded-3xl p-5 shadow-xs">
                 <div className="flex items-center justify-between text-zinc-400 mb-2">
                   <span className="text-xs font-medium uppercase tracking-wider">Hard Banned</span>
-                  <Ban className="w-4 h-4 text-red-400" />
+                  <Ban className="w-4 h-4 text-amber-400" />
                 </div>
-                <div className="text-2xl sm:text-3xl font-black text-red-400 font-mono">
+                <div className="text-2xl sm:text-3xl font-black text-amber-300 font-mono">
                   {overview?.totalBanned ?? 0}
                 </div>
-                <div className="text-[11px] text-zinc-500 mt-1">IP & Device UUID blocks</div>
+                <div className="text-[11px] text-zinc-500 mt-1">Permanently locked out</div>
               </div>
 
-              <div className="bg-zinc-900/70 border border-zinc-800/80 rounded-2xl p-5 shadow-xs">
+              <div className="bg-zinc-900/60 border border-zinc-800/80 rounded-3xl p-5 shadow-xs">
                 <div className="flex items-center justify-between text-zinc-400 mb-2">
                   <span className="text-xs font-medium uppercase tracking-wider">Today&apos;s Reports</span>
                   <Sparkles className="w-4 h-4 text-emerald-400" />
@@ -642,7 +813,7 @@ export default function AdminPage() {
             ========================================================================= */}
         {activeTab === "reports" && (
           <div className="space-y-4 animate-in fade-in duration-200">
-            {/* Search & Filter Bar */}
+            {/* Search & Filter Bar with Purge Actions */}
             <div className="flex flex-col lg:flex-row items-center justify-between gap-3 bg-zinc-900/60 border border-zinc-800/80 rounded-2xl p-3">
               <div className="relative w-full lg:w-72">
                 <Search className="w-4 h-4 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -694,6 +865,16 @@ export default function AdminPage() {
                     </button>
                   ))}
                 </div>
+
+                {/* Quick Purge Menu */}
+                <button
+                  onClick={() => handlePurgeReports("dismissed")}
+                  title="Purge all dismissed reports"
+                  className="px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-red-300 text-xs font-semibold border border-zinc-700 transition-colors cursor-pointer flex items-center gap-1.5 ml-auto lg:ml-2"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Purge Dismissed</span>
+                </button>
               </div>
             </div>
 
@@ -703,6 +884,19 @@ export default function AdminPage() {
                 <table className="w-full text-left text-xs">
                   <thead className="bg-zinc-950/80 border-b border-zinc-800/80 text-zinc-400 font-medium uppercase tracking-wider text-[10px]">
                     <tr>
+                      <th className="p-3.5 w-10 text-center">
+                        <button
+                          onClick={toggleSelectAllReports}
+                          className="text-zinc-400 hover:text-white cursor-pointer"
+                          title="Select / Deselect All"
+                        >
+                          {selectedReportIds.size === filteredReports.length && filteredReports.length > 0 ? (
+                            <CheckSquare className="w-4 h-4 text-emerald-400" />
+                          ) : (
+                            <Square className="w-4 h-4" />
+                          )}
+                        </button>
+                      </th>
                       <th className="p-3.5">Status</th>
                       <th className="p-3.5">Reason</th>
                       <th className="p-3.5">Reported Identifier</th>
@@ -714,7 +908,7 @@ export default function AdminPage() {
                   <tbody className="divide-y divide-zinc-800/50 text-zinc-300">
                     {filteredReports.length === 0 ? (
                       <tr>
-                        <td colSpan={6} className="p-8 text-center text-zinc-500">
+                        <td colSpan={7} className="p-8 text-center text-zinc-500">
                           No reports found matching your filter criteria.
                         </td>
                       </tr>
@@ -722,10 +916,29 @@ export default function AdminPage() {
                       filteredReports.map((report) => {
                         const isDismissed = report.status === "dismissed";
                         const isResolved = report.status === "resolved";
-                        const isQuarantined = !isDismissed && !isResolved;
+                        const isSelected = selectedReportIds.has(report.id);
 
                         return (
-                          <tr key={report.id} className="hover:bg-zinc-800/30 transition-colors">
+                          <tr
+                            key={report.id}
+                            className={`transition-colors ${
+                              isSelected ? "bg-zinc-800/60" : "hover:bg-zinc-800/30"
+                            }`}
+                          >
+                            {/* Checkbox */}
+                            <td className="p-3.5 text-center">
+                              <button
+                                onClick={() => toggleSelectReport(report.id)}
+                                className="text-zinc-400 hover:text-white cursor-pointer"
+                              >
+                                {isSelected ? (
+                                  <CheckSquare className="w-4 h-4 text-emerald-400" />
+                                ) : (
+                                  <Square className="w-4 h-4 text-zinc-600" />
+                                )}
+                              </button>
+                            </td>
+
                             {/* Status Badge */}
                             <td className="p-3.5 whitespace-nowrap">
                               {isDismissed ? (
@@ -821,7 +1034,7 @@ export default function AdminPage() {
                               <button
                                 onClick={() => handleDeleteReport(report.id)}
                                 title="Delete report permanently"
-                                className="p-1 rounded-lg text-zinc-500 hover:text-red-400 hover:bg-red-950/40 transition-colors cursor-pointer"
+                                className="p-1.5 rounded-lg text-zinc-500 hover:text-red-400 hover:bg-red-950/40 transition-colors cursor-pointer inline-flex items-center justify-center"
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
                               </button>
@@ -846,7 +1059,7 @@ export default function AdminPage() {
               <div>
                 <h2 className="text-sm font-bold text-white">Quarantined Users Pool</h2>
                 <p className="text-xs text-zinc-400">
-                  These users are restricted to matching only with other toxic users until their duration expires.
+                  These users are restricted to matching only with other toxic users until released.
                 </p>
               </div>
             </div>
@@ -882,12 +1095,19 @@ export default function AdminPage() {
                         <td className="p-3.5 font-mono text-amber-400 text-[11px]">
                           {new Date(item.quarantined_until).toLocaleString()}
                         </td>
-                        <td className="p-3.5 text-right">
+                        <td className="p-3.5 text-right space-x-2">
                           <button
                             onClick={() => handleReleaseUser({ identifier: item.identifier })}
                             className="px-3 py-1.5 rounded-lg bg-emerald-950/80 hover:bg-emerald-900 text-emerald-300 text-xs font-semibold border border-emerald-800/60 transition-colors cursor-pointer"
                           >
-                            Release to Clean Pool
+                            Release
+                          </button>
+                          <button
+                            onClick={() => handleDeleteQuarantine(item.id, item.identifier)}
+                            title="Delete quarantine record"
+                            className="p-1.5 rounded-lg text-zinc-500 hover:text-red-400 hover:bg-red-950/40 transition-colors cursor-pointer inline-flex items-center justify-center"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
                           </button>
                         </td>
                       </tr>
@@ -947,12 +1167,13 @@ export default function AdminPage() {
                         <td className="p-3.5 text-zinc-500 text-[11px]">
                           {new Date(ban.banned_at).toLocaleString()}
                         </td>
-                        <td className="p-3.5 text-right">
+                        <td className="p-3.5 text-right space-x-2">
                           <button
-                            onClick={() => handleReleaseUser({ identifier: ban.identifier })}
-                            className="px-3 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-semibold transition-colors cursor-pointer"
+                            onClick={() => handleDeleteBan(ban.id, ban.identifier)}
+                            className="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 hover:text-red-300 text-xs font-semibold transition-colors cursor-pointer inline-flex items-center gap-1"
                           >
-                            Remove Ban
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span>Remove Ban</span>
                           </button>
                         </td>
                       </tr>
@@ -973,7 +1194,7 @@ export default function AdminPage() {
               <div>
                 <h2 className="text-base font-bold text-white mb-1">Cloudflare D1 Maintenance</h2>
                 <p className="text-xs text-zinc-400">
-                  Run manual cleanup cycles to purge 3-month-old guest records and maintain database speed.
+                  Run manual cleanup cycles to purge old records and maintain database speed.
                 </p>
               </div>
 
@@ -1008,6 +1229,23 @@ export default function AdminPage() {
                 >
                   <Trash2 className="w-3.5 h-3.5 text-amber-400" />
                   <span>Execute Purge (30 Days)</span>
+                </button>
+              </div>
+
+              <div className="p-4 rounded-2xl bg-zinc-950 border border-zinc-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <div>
+                  <h3 className="text-sm font-semibold text-red-400">Purge All Reports Data</h3>
+                  <p className="text-xs text-zinc-400 mt-0.5">
+                    Wipes all logged reports from D1 database (resets reports count to 0).
+                  </p>
+                </div>
+                <button
+                  onClick={() => handlePurgeReports("all")}
+                  disabled={isLoading}
+                  className="px-4 py-2.5 rounded-xl bg-red-950/80 hover:bg-red-900 border border-red-800/60 text-red-300 text-xs font-bold transition-all cursor-pointer flex items-center gap-2 shadow-xs disabled:opacity-50"
+                >
+                  <Trash2 className="w-3.5 h-3.5 text-red-400" />
+                  <span>Purge All Reports</span>
                 </button>
               </div>
             </div>
@@ -1048,73 +1286,56 @@ export default function AdminPage() {
               </div>
               <div className="flex justify-between pb-1.5 border-b border-zinc-800/60">
                 <span className="text-zinc-500">Device UUID:</span>
-                <span className="font-mono text-white">{selectedReport.reported_device_id}</span>
-              </div>
-              <div className="flex justify-between pb-1.5 border-b border-zinc-800/60">
-                <span className="text-zinc-500">Platform & Screen:</span>
-                <span className="font-mono text-white">
-                  {selectedReport.reported_platform} ({selectedReport.reported_screen})
-                </span>
+                <span className="font-mono text-white break-all">{selectedReport.reported_device_id || "None"}</span>
               </div>
               <div className="flex justify-between pb-1.5 border-b border-zinc-800/60">
                 <span className="text-zinc-500">GPU Renderer:</span>
-                <span className="font-mono text-white truncate max-w-xs">{selectedReport.reported_gpu}</span>
+                <span className="font-mono text-zinc-400 break-all">{selectedReport.reported_gpu || "Unknown"}</span>
               </div>
               <div className="flex justify-between pb-1.5 border-b border-zinc-800/60">
-                <span className="text-zinc-500">Timezone / Language:</span>
-                <span className="font-mono text-white">
-                  {selectedReport.reported_timezone} ({selectedReport.reported_language})
+                <span className="text-zinc-500">Platform / Screen:</span>
+                <span className="font-mono text-zinc-400">
+                  {selectedReport.reported_platform} ({selectedReport.reported_screen})
                 </span>
               </div>
               <div className="pt-1">
-                <span className="text-zinc-500 block mb-1">Details / Note:</span>
-                <p className="text-zinc-200 bg-zinc-900/90 p-2.5 rounded-xl border border-zinc-800">
-                  {selectedReport.details || "No custom note provided."}
+                <span className="text-zinc-500 block mb-1">Details & Note:</span>
+                <p className="bg-zinc-900 p-2.5 rounded-xl border border-zinc-800 text-white font-mono text-[11px]">
+                  {selectedReport.details || "No details provided."}
                 </p>
               </div>
             </div>
 
-            <div className="flex items-center justify-between gap-2.5 pt-2">
+            {/* Modal Actions */}
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-zinc-800">
               <button
                 onClick={() => handleDeleteReport(selectedReport.id)}
-                className="px-3.5 py-2 rounded-xl bg-red-950/60 hover:bg-red-900/80 text-red-300 text-xs font-semibold border border-red-800/40 transition-colors cursor-pointer flex items-center gap-1.5"
+                className="px-3.5 py-2 rounded-xl bg-red-950/80 hover:bg-red-900 text-red-300 text-xs font-semibold border border-red-800/60 transition-colors cursor-pointer flex items-center gap-1.5"
               >
                 <Trash2 className="w-3.5 h-3.5" />
-                <span>Delete</span>
+                <span>Delete Report</span>
               </button>
 
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() =>
-                    handleDismissReport(
-                      selectedReport.id,
-                      selectedReport.reported_device_id || selectedReport.ip_address
-                    )
-                  }
-                  className="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-semibold transition-colors cursor-pointer"
-                >
-                  Dismiss Report
-                </button>
-                <button
-                  onClick={() =>
-                    handleReleaseUser({
-                      reportId: selectedReport.id,
-                      deviceId: selectedReport.reported_device_id,
-                      ip: selectedReport.ip_address,
-                    })
-                  }
-                  className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-colors cursor-pointer"
-                >
-                  Release to Clean Pool
-                </button>
-              </div>
+              <button
+                onClick={() =>
+                  handleReleaseUser({
+                    reportId: selectedReport.id,
+                    deviceId: selectedReport.reported_device_id,
+                    ip: selectedReport.ip_address,
+                  })
+                }
+                className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-all shadow-md cursor-pointer flex items-center gap-1.5"
+              >
+                <Unlock className="w-3.5 h-3.5" />
+                <span>Release to Clean Pool</span>
+              </button>
             </div>
           </div>
         </div>
       )}
 
       {/* =========================================================================
-          ADD MANUAL HARD BAN MODAL
+          ADD HARD BAN MODAL
           ========================================================================= */}
       {showBanModal && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200">
@@ -1126,28 +1347,21 @@ export default function AdminPage() {
               <X className="w-4 h-4" />
             </button>
 
-            <h2 className="text-base font-bold text-white flex items-center gap-2">
-              <Ban className="w-4 h-4 text-red-500" />
-              <span>Add Hard Ban</span>
-            </h2>
+            <div>
+              <h2 className="text-base font-bold text-white flex items-center gap-2">
+                <Ban className="w-4 h-4 text-red-400" />
+                <span>Add Permanent Hard Ban</span>
+              </h2>
+              <p className="text-xs text-zinc-400 mt-1">
+                Enter an IP address, Device UUID, or Canvas Fingerprint to ban from matching.
+              </p>
+            </div>
 
             <form onSubmit={handleAddBan} className="space-y-3.5">
               <div>
-                <label className="text-[11px] font-medium text-zinc-400 block mb-1">
-                  Identifier (IP Address or Device UUID):
+                <label className="block text-[11px] font-semibold text-zinc-400 uppercase mb-1">
+                  Identifier Type
                 </label>
-                <input
-                  type="text"
-                  value={banIdentifier}
-                  onChange={(e) => setBanIdentifier(e.target.value)}
-                  placeholder="e.g. 123.45.67.89 or device_uuid..."
-                  required
-                  className="w-full h-10 px-3 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-white placeholder:text-zinc-600 focus:outline-none focus:border-zinc-600 font-mono"
-                />
-              </div>
-
-              <div>
-                <label className="text-[11px] font-medium text-zinc-400 block mb-1">Identifier Type:</label>
                 <select
                   value={banType}
                   onChange={(e) => setBanType(e.target.value)}
@@ -1155,35 +1369,37 @@ export default function AdminPage() {
                 >
                   <option value="device_id">Device UUID (Hardware)</option>
                   <option value="ip">IP Address</option>
+                  <option value="canvas_hash">Canvas Fingerprint Hash</option>
                 </select>
               </div>
 
               <div>
-                <label className="text-[11px] font-medium text-zinc-400 block mb-1">Ban Reason:</label>
+                <label className="block text-[11px] font-semibold text-zinc-400 uppercase mb-1">
+                  Identifier Value
+                </label>
                 <input
                   type="text"
-                  value={banReason}
-                  onChange={(e) => setBanReason(e.target.value)}
-                  placeholder="Reason for ban..."
+                  value={banIdentifier}
+                  onChange={(e) => setBanIdentifier(e.target.value)}
+                  placeholder="e.g. 192.168.1.1 or 8f2a1b9c-..."
                   required
-                  className="w-full h-10 px-3 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-white placeholder:text-zinc-600 focus:outline-none focus:border-zinc-600"
+                  className="w-full h-10 px-3 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-white font-mono placeholder:text-zinc-600 focus:outline-none focus:border-zinc-600"
                 />
               </div>
 
               <div>
-                <label className="text-[11px] font-medium text-zinc-400 block mb-1">
-                  Duration in Hours (Leave empty for Permanent):
+                <label className="block text-[11px] font-semibold text-zinc-400 uppercase mb-1">
+                  Reason
                 </label>
                 <input
-                  type="number"
-                  value={banDuration}
-                  onChange={(e) => setBanDuration(e.target.value)}
-                  placeholder="e.g. 24, 72 (Empty = Permanent)"
+                  type="text"
+                  value={banReason}
+                  onChange={(e) => setBanReason(e.target.value)}
                   className="w-full h-10 px-3 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-white placeholder:text-zinc-600 focus:outline-none focus:border-zinc-600"
                 />
               </div>
 
-              <div className="flex items-center justify-end gap-2.5 pt-2">
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-zinc-800">
                 <button
                   type="button"
                   onClick={() => setShowBanModal(false)}
@@ -1193,9 +1409,10 @@ export default function AdminPage() {
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white text-xs font-bold transition-colors cursor-pointer"
+                  className="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white text-xs font-bold transition-all shadow-md cursor-pointer flex items-center gap-1.5"
                 >
-                  Apply Ban
+                  <Ban className="w-3.5 h-3.5" />
+                  <span>Confirm Hard Ban</span>
                 </button>
               </div>
             </form>
