@@ -82,10 +82,13 @@ export async function initNsfwDetector(): Promise<boolean> {
     const nsfwjs = (window as any).nsfwjs;
     if (nsfwjs) {
       try {
+        // Self-hosted model load from /models/mobilenet_v2/
         nsfwModel = await nsfwjs.load("/models/mobilenet_v2/", { size: 224 });
-        console.log("✅ Genital & Breast AI Shield ready (/models/mobilenet_v2/)");
-      } catch {
+        console.log("✅ Genital & Breast AI Shield active (/models/mobilenet_v2/)");
+      } catch (errLocal) {
+        console.warn("[-] Local model load fallback to jsDelivr:", errLocal);
         nsfwModel = await nsfwjs.load("https://cdn.jsdelivr.net/gh/infinitered/nsfwjs/models/mobilenet_v2/", { size: 224 });
+        console.log("✅ Genital & Breast AI Shield active (jsDelivr CDN)");
       }
       isNsfwReady = true;
       isNsfwLoading = false;
@@ -110,7 +113,7 @@ export interface NsfwCheckResult {
 /**
  * Real-Time Video Frame Moderation Check.
  * Ultra-Lightweight (Runs in < 15ms on WebGL GPU, 0% Phone Heating, 0% CPU strain).
- * ONLY triggers on explicit Genitalia, Female Breasts, or Pornographic Flashing.
+ * Accurately detects explicit Genitalia, Female Breasts, or Pornographic Flashing.
  */
 export async function checkVideoFrame(videoElement: HTMLVideoElement): Promise<NsfwCheckResult> {
   if (!videoElement || videoElement.readyState < 2 || videoElement.videoWidth === 0) {
@@ -146,24 +149,34 @@ export async function checkVideoFrame(videoElement: HTMLVideoElement): Promise<N
     const top = predictions[0];
     const pornProb = predictions.find((p) => p.className === "Porn")?.probability || 0;
     const hentaiProb = predictions.find((p) => p.className === "Hentai")?.probability || 0;
+    const sexyProb = predictions.find((p) => p.className === "Sexy")?.probability || 0;
+    const neutralProb = predictions.find((p) => p.className === "Neutral")?.probability || 0;
 
     // =========================================================================
-    // STRICT & EXCLUSIVE GENITALIA & BREAST TRIGGER:
-    // Only triggers on genuine explicit genitalia, female breasts, or pornographic flashing!
+    // HIGH-PRECISION GENITALIA & BREAST TRIGGER:
     //
-    // - Six-packs, shirtless torsos, tank tops, and vests are classified as 'Sexy' / 'Neutral' -> ALLOWED!
-    // - Close-up faces, kissing faces, waving hands, walls, and rooms are 'Neutral' -> ALLOWED!
+    // 1. Direct Porn / Genital Flashing / Penis / Vagina:
+    //    pornProb >= 0.15 OR hentaiProb >= 0.35 OR Top Class === 'Porn'
+    //
+    // 2. Female Breasts / Explicit Nude Lower Body:
+    //    sexyProb >= 0.40 AND (pornProb >= 0.08 || neutralProb <= 0.35)
+    //    OR (pornProb + sexyProb >= 0.50 AND neutralProb <= 0.40)
+    //
+    // - Close-up faces, walls, rooms: neutralProb >= 0.60 -> ALLOWED!
+    // - Six-packs, shirtless torsos, tank tops: pornProb < 0.08, neutralProb >= 0.45 -> ALLOWED!
     // =========================================================================
     const isExplicitGenitaliaOrBreasts =
-      pornProb >= 0.35 ||
-      hentaiProb >= 0.50 ||
-      (top.className === "Porn" && pornProb >= 0.28);
+      pornProb >= 0.15 ||
+      hentaiProb >= 0.35 ||
+      (top.className === "Porn" && pornProb >= 0.12) ||
+      (sexyProb >= 0.40 && (pornProb >= 0.08 || neutralProb <= 0.35)) ||
+      (pornProb + sexyProb >= 0.50 && neutralProb <= 0.40);
 
     if (isExplicitGenitaliaOrBreasts) {
       return {
         isNsfw: true,
-        topCategory: "Explicit Genitalia / Breasts",
-        probability: Math.max(pornProb, hentaiProb, top.probability),
+        topCategory: pornProb >= 0.15 ? "Explicit Genitalia" : "Female Breasts / Nudity",
+        probability: Math.max(pornProb, hentaiProb, sexyProb),
       };
     }
 
