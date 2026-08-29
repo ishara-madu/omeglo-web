@@ -96,6 +96,8 @@ export class Matchmaker {
           await this.handleFindMatch(socketId, ws, clientIp, data);
         } else if (event === "report-partner") {
           await this.handleReportPartner(socketId, ws, clientIp, data);
+        } else if (event === "report-self") {
+          await this.handleReportSelf(socketId, ws, clientIp, data);
         } else if (event === "leave-chat") {
           this.handleLeaveChat(socketId);
         }
@@ -363,6 +365,58 @@ export class Matchmaker {
     }
 
     this.emit(socketId, "report-confirmed", { success: true, durationMinutes });
+  }
+
+  async handleReportSelf(socketId, ws, clientIp, { reason, details }) {
+    const userSession = this.userSessions.get(socketId);
+    const fingerprint = userSession?.fingerprint || {};
+    const primaryIdentifier = fingerprint.deviceId || clientIp;
+
+    if (this.env.DB) {
+      try {
+        const reportId = "rep_self_" + crypto.randomUUID();
+        await this.env.DB.prepare(
+          `INSERT INTO reports (id, reporter_socket_id, reported_socket_id, reported_peer_id, reported_device_id, reported_user_agent, reported_platform, reported_screen, reported_timezone, reported_language, reported_gpu, reported_metadata, reason, details, mode, ip_address, status, created_at)
+           VALUES (?, 'system_ai_self', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'quarantined', datetime('now'))`
+        )
+          .bind(
+            reportId,
+            socketId,
+            userSession?.peerId || "unknown",
+            fingerprint.deviceId || "unknown",
+            fingerprint.userAgent || "unknown",
+            fingerprint.platform || "unknown",
+            fingerprint.screenResolution || "unknown",
+            fingerprint.timezone || "unknown",
+            fingerprint.language || "unknown",
+            fingerprint.gpuRenderer || "unknown",
+            JSON.stringify(fingerprint),
+            reason || "harassment",
+            details || "Violent threat or severe policy violation attempted",
+            userSession?.mode || "text",
+            clientIp
+          )
+          .run();
+
+        await this.env.DB.prepare(
+          `INSERT INTO user_reputation (id, identifier, identifier_type, report_count, is_quarantined, quarantined_until, last_reported_at, created_at)
+           VALUES (?, ?, ?, 1, 1, datetime('now', '+60 minutes'), datetime('now'), datetime('now'))
+           ON CONFLICT(identifier) DO UPDATE SET
+             report_count = report_count + 1,
+             is_quarantined = 1,
+             quarantined_until = datetime('now', '+60 minutes'),
+             last_reported_at = datetime('now')`
+        )
+          .bind("rep_u_" + crypto.randomUUID(), primaryIdentifier, fingerprint.deviceId ? "device_id" : "ip")
+          .run();
+      } catch (err) {
+        console.error("D1 self-report save error:", err);
+      }
+    }
+
+    this.cleanupActivePair(socketId);
+    this.removeFromAllQueues(socketId);
+    this.emit(socketId, "error-msg", "You have been quarantined for violating community safety guidelines.");
   }
 
   handleLeaveChat(socketId) {

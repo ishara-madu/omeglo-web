@@ -1,7 +1,9 @@
 /**
- * TensorFlow.js Toxicity Model (Google) for Omeglo
- * Detects severe toxicity, insults, threats, identity attacks, and sexually explicit text.
- * Dynamically loaded in the background with zero impact on initial SEO.
+ * TensorFlow.js Toxicity Model (Google) & Smart Threat/Harassment Shield for Omeglo
+ * Detects severe toxicity, death threats, extortion, identity attacks, and abusive language.
+ * Two-Tier Architecture:
+ *  - Tier 1: Zero-Delay Threat & Blackmail Regex Pattern Engine
+ *  - Tier 2: Google TensorFlow.js Toxicity Neural Network
  */
 
 let isToxicityLoading = false;
@@ -38,7 +40,7 @@ export async function initToxicityDetector(): Promise<boolean> {
           clearInterval(interval);
           resolve(true);
         }
-      }, 150);
+      }, 100);
     });
   }
 
@@ -57,8 +59,8 @@ export async function initToxicityDetector(): Promise<boolean> {
 
     const toxicity = (window as any).toxicity;
     if (toxicity) {
-      // Threshold for prediction (0.85 = 85% confidence)
-      const threshold = 0.85;
+      // Sensitive threshold (0.75 for robust threat/insult detection)
+      const threshold = 0.75;
       toxicityModel = await toxicity.load(threshold, [
         "identity_attack",
         "insult",
@@ -70,14 +72,14 @@ export async function initToxicityDetector(): Promise<boolean> {
       ]);
       isToxicityReady = true;
       isToxicityLoading = false;
-      console.log("✅ TensorFlow.js Toxicity Model (Google) loaded.");
+      console.log("✅ TensorFlow.js Toxicity Model (Google) ready.");
       return true;
     }
 
     isToxicityLoading = false;
     return false;
   } catch (err) {
-    console.warn("[-] Could not load Toxicity model:", err);
+    console.warn("[-] Toxicity model fallback active:", err);
     isToxicityLoading = false;
     return false;
   }
@@ -85,45 +87,84 @@ export async function initToxicityDetector(): Promise<boolean> {
 
 export interface ToxicityResult {
   isToxic: boolean;
+  isSevereThreat: boolean;
   flaggedLabels: string[];
   maxScore: number;
 }
 
+// Regex patterns for immediate zero-delay detection of threats & harassment
+const SEVERE_THREAT_PATTERNS = [
+  /\b(kill|murder|shoot|stab|choke|strangle)\s+(you|u|ur|your)\b/i,
+  /\b(i\s*will\s*(kill|hunt|find|destroy|end)\s*(you|u))\b/i,
+  /\b(die\s*(bitch|whore|bastard|motherfucker)?)\b/i,
+  /\b(leak|expose|post|share)\s*(your|ur)\s*(nudes|pics|video|photos|address|details)\b/i,
+  /\b(pay\s*me|send\s*money)\s*or\s*(i\s*will|i'll)\b/i,
+  /\b(rape|assault)\s+(you|u)\b/i,
+  /\b(doxx|dox)\s*(you|u)\b/i,
+  /\b(bomb|terrorist|massacre)\b/i,
+  /\b(go\s*die|kill\s*yourself|kys)\b/i,
+];
+
 /**
- * Classify a text message for toxicity and abusive content
+ * Classify a text message for threats, blackmail, and toxicity
  */
 export async function checkTextToxicity(text: string): Promise<ToxicityResult> {
   if (!text || typeof text !== "string" || text.trim().length === 0) {
-    return { isToxic: false, flaggedLabels: [], maxScore: 0 };
+    return { isToxic: false, isSevereThreat: false, flaggedLabels: [], maxScore: 0 };
   }
 
-  if (!toxicityModel) {
-    initToxicityDetector().catch(() => {});
-    return { isToxic: false, flaggedLabels: [], maxScore: 0 };
-  }
+  const cleanText = text.trim();
 
-  try {
-    const predictions = await toxicityModel.classify([text]);
-    const flaggedLabels: string[] = [];
-    let maxScore = 0;
-
-    for (const pred of predictions) {
-      const match = pred.results[0]?.match;
-      const prob = pred.results[0]?.probabilities[1] || 0;
-      if (prob > maxScore) maxScore = prob;
-
-      if (match === true) {
-        flaggedLabels.push(pred.label);
-      }
+  // ==========================================
+  // Tier 1: Instant Zero-Delay Threat Regex Check
+  // ==========================================
+  for (const pattern of SEVERE_THREAT_PATTERNS) {
+    if (pattern.test(cleanText)) {
+      return {
+        isToxic: true,
+        isSevereThreat: true,
+        flaggedLabels: ["threat", "severe_toxicity"],
+        maxScore: 0.99,
+      };
     }
-
-    return {
-      isToxic: flaggedLabels.length > 0,
-      flaggedLabels,
-      maxScore,
-    };
-  } catch (err) {
-    console.error("[-] Error classifying text with Toxicity Model:", err);
-    return { isToxic: false, flaggedLabels: [], maxScore: 0 };
   }
+
+  // ==========================================
+  // Tier 2: Google TensorFlow.js Toxicity Model
+  // ==========================================
+  if (toxicityModel) {
+    try {
+      const predictions = await toxicityModel.classify([cleanText]);
+      const flaggedLabels: string[] = [];
+      let maxScore = 0;
+      let isSevereThreat = false;
+
+      for (const pred of predictions) {
+        const match = pred.results[0]?.match;
+        const prob = pred.results[0]?.probabilities[1] || 0;
+        if (prob > maxScore) maxScore = prob;
+
+        if (match === true || prob > 0.70) {
+          flaggedLabels.push(pred.label);
+          if (pred.label === "threat" || pred.label === "severe_toxicity") {
+            isSevereThreat = true;
+          }
+        }
+      }
+
+      return {
+        isToxic: flaggedLabels.length > 0,
+        isSevereThreat,
+        flaggedLabels,
+        maxScore,
+      };
+    } catch (err) {
+      console.error("[-] Error classifying text with Toxicity Model:", err);
+    }
+  } else {
+    // Warmup in background
+    initToxicityDetector().catch(() => {});
+  }
+
+  return { isToxic: false, isSevereThreat: false, flaggedLabels: [], maxScore: 0 };
 }

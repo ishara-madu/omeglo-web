@@ -722,9 +722,19 @@ export default function Home() {
         const filterRes = filterMessage(data);
         const cleanIncomingText = filterRes.cleanText;
 
-        // Background Toxicity check on incoming text
+        // Background Toxicity & Severe Threat check on incoming text
         checkTextToxicity(data).then((toxRes) => {
-          if (toxRes.isToxic) {
+          if (toxRes.isSevereThreat) {
+            showModerationAlert("⚠️ Threat detected! Stranger auto-reported and quarantined.", "error");
+            socketRef.current?.emit("report-partner", {
+              targetPeerId: currentPartnerPeerIdRef.current,
+              reason: "harassment",
+              details: `AI Auto-Detected Threat/Extortion in text: "${data.slice(0, 80)}"`,
+            });
+            setTimeout(() => {
+              handleNext();
+            }, 1400);
+          } else if (toxRes.isToxic) {
             showModerationAlert("⚠️ Warning: Inappropriate language detected from stranger.", "warning");
           }
         }).catch(() => {});
@@ -1514,20 +1524,32 @@ export default function Home() {
         }
       }
 
-      // 2. Scan local video feed (warn user if user violates guidelines)
+      // 2. Scan local video feed (Strict Zero-Tolerance Auto-Quarantine)
       if (localVideoRef.current && status === "connected") {
         const localNsfw = await checkVideoFrame(localVideoRef.current);
         if (localNsfw.isNsfw) {
           showModerationAlert(
-            "⚠️ Camera Warning: Inappropriate content detected on your camera. Continued violations will lead to quarantine.",
+            "⚠️ Camera Violation: Inappropriate content detected on camera. You have been quarantined.",
             "error"
           );
+
+          // Auto-report local violator to D1 for immediate quarantine
+          socketRef.current?.emit("report-self", {
+            reason: "nudity",
+            details: `AI Auto-Detected Nudity on Camera (${localNsfw.topCategory}: ${(localNsfw.probability * 100).toFixed(0)}%)`,
+          });
+
+          // Disconnect local violator immediately
+          setTimeout(() => {
+            handleStop();
+          }, 1200);
+          return;
         }
       }
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [status, chatMode, handleNext, showModerationAlert]);
+  }, [status, chatMode, handleNext, handleStop, showModerationAlert]);
 
   // Handle Mic Mute Toggle (Ensures complete hardware sync with state)
   const toggleMic = () => {
@@ -1695,22 +1717,35 @@ export default function Home() {
       return;
     }
 
-    if (filterRes.warningMessage) {
-      showModerationAlert(filterRes.warningMessage, "warning");
+    // 2. Strict Threat, Blackmail & Harassment Auto-Report & Quarantine
+    const toxCheck = await checkTextToxicity(rawText);
+    if (toxCheck.isSevereThreat) {
+      showModerationAlert(
+        "⚠️ Account Quarantined: Sending violent threats or blackmail is strictly prohibited.",
+        "error"
+      );
+      setInputMessage("");
+
+      // Auto-report violator directly to D1 for immediate quarantine
+      socketRef.current?.emit("report-self", {
+        reason: "harassment",
+        details: `Violent threat/extortion attempted in text: "${rawText.slice(0, 80)}"`,
+      });
+
+      // Disconnect violator from chat
+      setTimeout(() => {
+        handleStop();
+      }, 1200);
+      return;
+    }
+
+    if (toxCheck.isToxic) {
+      showModerationAlert("⚠️ Warning: Inappropriate or abusive language is restricted.", "warning");
     }
 
     const msgToSend = filterRes.cleanText;
 
-    // 2. Background TensorFlow.js Toxicity Model Check
-    checkTextToxicity(rawText)
-      .then((toxRes) => {
-        if (toxRes.isToxic) {
-          showModerationAlert("⚠️ Warning: Toxic, abusive, or harassing words are prohibited.", "warning");
-        }
-      })
-      .catch(() => {});
-
-    // Reset typing status and send message
+    // Reset typing status and send clean message
     if (dataConnRef.current && dataConnRef.current.open) {
       try {
         dataConnRef.current.send(JSON.stringify({ type: "typing", isTyping: false }));
