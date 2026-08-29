@@ -1256,7 +1256,7 @@ export default function Home() {
       const connectMsg: ChatMessage = {
         id: "sys-" + Date.now() + "-" + Math.random().toString(36).slice(2, 6),
         sender: "system",
-        text: `Connected with a stranger${countrySnippet} in ${mode === "text" ? "Text" : "Video"} Chat! Say hi.`,
+        text: `Connected with a stranger${countrySnippet}! Say hi.`,
         timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
       };
       setMessages([connectMsg]);
@@ -1291,7 +1291,7 @@ export default function Home() {
       setStatus("disconnected");
       setAutoNextCountdown(3);
       playAudioSFX("leave", isSoundMutedRef.current);
-      addSystemMessage("Stranger has disconnected. Finding next stranger in 3s...");
+      addSystemMessage("Stranger left the chat. Finding next match in 3s...");
     });
 
     socket.on("chat-stopped", () => {
@@ -1532,7 +1532,7 @@ export default function Home() {
       pendingStartMatchRef.current = true;
       cleanupCall();
       setStatus("searching");
-      addSystemMessage("Connecting to peer network... Matchmaking will start automatically.");
+      addSystemMessage("Connecting... Finding a match in a moment.");
 
       if (!peerRef.current || peerRef.current.destroyed) {
         initPeerRef.current?.();
@@ -1615,7 +1615,7 @@ export default function Home() {
       });
     } else {
       pendingStartMatchRef.current = true;
-      addSystemMessage("Connecting to peer network... Matchmaking will start automatically.");
+      addSystemMessage("Connecting... Finding a match in a moment.");
       if (!peerRef.current || peerRef.current.destroyed) {
         initPeerRef.current?.();
       } else if (peerRef.current.disconnected) {
@@ -1941,27 +1941,27 @@ export default function Home() {
             </div>
 
             <h2 className="text-lg font-bold tracking-tight text-zinc-950 mb-1">
-              Internet Signal Too Weak
+              Slow Internet Connection
             </h2>
             <p className="text-xs text-zinc-500 mb-4 leading-relaxed max-w-xs">
-              A minimum stable connection is required for live video chat. Your current speed is too low to maintain video streaming without lag.
+              Video chat needs a faster connection. Your current speed is too slow for smooth video.
             </p>
 
             {/* Network Diagnostic Info Box */}
             <div className="w-full bg-zinc-50 border border-zinc-200/80 rounded-2xl p-3.5 mb-5 text-left text-xs space-y-2">
               <div className="flex items-center justify-between text-zinc-700 pb-1.5 border-b border-zinc-200/60">
-                <span className="font-medium text-zinc-500">Connection Status:</span>
+                <span className="font-medium text-zinc-500">Internet Speed:</span>
                 <span className="font-semibold text-red-600 flex items-center gap-1.5">
                   <span className="w-2 h-2 rounded-full bg-red-500 animate-ping" />
-                  {networkQuality === "offline" ? "Offline" : "Critical (Below 0.25 Mbps)"}
+                  {networkQuality === "offline" ? "Offline" : "Very Slow"}
                 </span>
               </div>
               <div className="flex items-center justify-between text-zinc-600">
-                <span>Estimated Latency (RTT):</span>
+                <span>Response Delay:</span>
                 <span className="font-mono font-medium">{networkStats.rtt} ms</span>
               </div>
               <div className="text-[11px] text-zinc-400 pt-1 leading-normal">
-                💡 <strong>Tip:</strong> Move closer to your Wi-Fi router, turn off downloads, or switch to <strong>Text Only Mode</strong> for zero video requirements.
+                💡 <strong>Tip:</strong> Move closer to Wi-Fi, pause downloads, or switch to <strong>Text Mode</strong> to chat without video.
               </div>
             </div>
 
@@ -1979,7 +1979,7 @@ export default function Home() {
                 className="w-full h-11 rounded-xl bg-zinc-950 hover:bg-zinc-800 active:scale-[0.98] text-white text-xs font-semibold transition-all shadow-xs cursor-pointer flex items-center justify-center gap-2"
               >
                 <Activity className="w-3.5 h-3.5" />
-                <span>Test Signal & Retry</span>
+                <span>Try Again</span>
               </button>
               <button
                 type="button"
@@ -2048,7 +2048,7 @@ export default function Home() {
               </div>
               <div className="flex items-start gap-2 text-zinc-500 text-[11px]">
                 <Info className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-                <span>No camera? Switch to <strong>Text Only Mode</strong> for text chat without camera permissions.</span>
+                <span>No camera? Switch to <strong>Text Mode</strong> to chat with text only.</span>
               </div>
             </div>
 
@@ -2332,11 +2332,11 @@ export default function Home() {
             {/* Real-time Network Signal Health Indicator */}
             {chatMode === "video" && (
               <div
-                title={`Network Signal: ${networkQuality === "good"
-                  ? "Strong (Smooth HD)"
+                title={`Connection: ${networkQuality === "good"
+                  ? "Fast & Smooth"
                   : networkQuality === "fair"
-                    ? "Fair (Low Bandwidth - optimized)"
-                    : "Critical / Weak Signal"
+                    ? "Moderate Speed"
+                    : "Slow Connection"
                   }`}
                 className={`hidden md:flex items-center gap-1.5 px-2 py-1 rounded-full border transition-colors ${networkQuality === "good"
                   ? "bg-emerald-50/80 border-emerald-200/60 text-emerald-700"
@@ -2353,7 +2353,7 @@ export default function Home() {
                   <SignalLow className="w-3.5 h-3.5" />
                 )}
                 <span className="text-[10px] font-semibold capitalize">
-                  {networkQuality === "good" ? "Fast" : networkQuality === "fair" ? "Low" : "No Signal"}
+                  {networkQuality === "good" ? "Fast" : networkQuality === "fair" ? "Moderate" : "Slow"}
                 </span>
               </div>
             )}
@@ -2393,7 +2393,7 @@ export default function Home() {
 
             <div className="hidden lg:flex items-center gap-1.5 text-zinc-400">
               <Shield className="w-3.5 h-3.5" />
-              <span>P2P Encrypted</span>
+              <span>Private & Secure</span>
             </div>
           </div>
         </div>
@@ -2559,7 +2559,7 @@ export default function Home() {
                 </button>
                 <div className="bg-black/60 backdrop-blur-md text-[11px] text-zinc-300 px-2.5 py-1 rounded-full border border-white/10 flex items-center gap-1.5 pointer-events-none">
                   <span className={`w-1.5 h-1.5 rounded-full ${liveCallQuality === "good" ? "bg-emerald-400" : "bg-amber-400 animate-pulse"}`} />
-                  <span className="hidden sm:inline">{chatMode === "text" ? "P2P Text Active" : liveCallQuality === "good" ? "Live HD Video" : "Weak P2P Link"}</span>
+                  <span className="hidden sm:inline">{chatMode === "text" ? "Text Chat Active" : liveCallQuality === "good" ? "Live Video" : "Slow Connection"}</span>
                 </div>
               </div>
             )}
@@ -2570,8 +2570,8 @@ export default function Home() {
                 <AlertTriangle className="w-3.5 h-3.5 text-zinc-950 shrink-0" />
                 <span>
                   {liveCallQuality === "poor"
-                    ? "Network lagging: Motion prioritized over resolution"
-                    : "Low signal: Video optimized for weak connection"}
+                    ? "Slow connection: Adjusting quality to prevent lag"
+                    : "Low signal: Adjusting video quality"}
                 </span>
               </div>
             )}
@@ -2590,7 +2590,7 @@ export default function Home() {
                   </div>
                   <div className="space-y-0.5">
                     <p className="text-zinc-100 font-medium text-sm">
-                      {chatMode === "text" ? "Finding random text partner..." : "Connecting to video match..."}
+                      {chatMode === "text" ? "Finding someone to chat with..." : "Looking for a video match..."}
                     </p>
                     <p className="text-zinc-400 text-xs font-mono">
                       {matchPreference === "female"
@@ -2625,7 +2625,7 @@ export default function Home() {
                     {getCountryDetails(strangerCountry) ? ` ${getCountryDetails(strangerCountry)?.flag} (${getCountryDetails(strangerCountry)?.name})` : ""}
                   </p>
                   <p className="text-zinc-400 text-xs max-w-xs">
-                    You are connected via P2P Encrypted Text. Type in the chat box on the right to talk!
+                    You are connected! Type in the chat box on the right to say hi.
                   </p>
                 </div>
               </div>
@@ -2636,12 +2636,12 @@ export default function Home() {
               <div className="flex flex-col items-center gap-2 p-6 text-center select-none pointer-events-none z-0 max-w-xs animate-in fade-in">
                 <div className="space-y-1">
                   <p className="text-zinc-200 font-semibold text-sm">
-                    {chatMode === "text" ? "Ready for Random Text Chat" : "Ready for Video Chat"}
+                    {chatMode === "text" ? "Ready for Text Chat" : "Ready for Video Chat"}
                   </p>
                   <p className="text-zinc-500 text-xs max-w-xs">
                     {chatMode === "text"
-                      ? "Zero camera needed. Click Start to match with text chatters."
-                      : "Face-to-face video chat. Click Start to connect with strangers."}
+                      ? "No camera needed. Click Start to chat with someone new."
+                      : "Live video chat. Click Start to meet new people."}
                   </p>
                 </div>
               </div>
@@ -3034,14 +3034,14 @@ export default function Home() {
               <MessageSquare className="w-4.5 h-4.5 text-zinc-700 shrink-0" />
               <div>
                 <h2 className="text-xs font-semibold text-zinc-950 leading-none">
-                  {chatMode === "text" ? "P2P Text Chat" : "Live Video Chat"}
+                  {chatMode === "text" ? "Text Chat" : "Video Chat"}
                 </h2>
                 <span className="text-[10px] text-zinc-400 font-medium">
                   {status === "connected"
-                    ? "Direct Encrypted Connection"
+                    ? "Direct & Private"
                     : status === "searching"
-                      ? "Finding stranger..."
-                      : "Idle"}
+                      ? "Finding someone..."
+                      : "Ready"}
                 </span>
               </div>
             </div>
