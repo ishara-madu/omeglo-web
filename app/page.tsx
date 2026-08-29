@@ -1340,6 +1340,22 @@ export default function Home() {
     });
   };
 
+  // Auto-dismiss PiP controls when clicking/tapping anywhere outside the PiP container
+  useEffect(() => {
+    if (!showPipControls) return;
+
+    const handleOutsideClick = (e: MouseEvent | TouchEvent) => {
+      if (pipRef.current && !pipRef.current.contains(e.target as Node)) {
+        setShowPipControls(false);
+      }
+    };
+
+    document.addEventListener("pointerdown", handleOutsideClick);
+    return () => {
+      document.removeEventListener("pointerdown", handleOutsideClick);
+    };
+  }, [showPipControls]);
+
   // Get matching text for search
   const getSearchTargetText = () => {
     const modeText = chatMode === "text" ? "text partner" : "video stranger";
@@ -2523,11 +2539,11 @@ export default function Home() {
                 style={{
                   ...(pipPos
                     ? {
-                      left: `${pipPos.x}px`,
-                      top: `${pipPos.y}px`,
-                      right: "auto",
-                      bottom: "auto",
-                    }
+                        left: `${pipPos.x}px`,
+                        top: `${pipPos.y}px`,
+                        right: "auto",
+                        bottom: "auto",
+                      }
                     : {}),
                   ...(pipWidth ? { width: `${pipWidth}px`, height: `${Math.round(pipWidth * 1.35)}px` } : {}),
                 }}
@@ -2545,9 +2561,11 @@ export default function Home() {
                     togglePipControls();
                   }
                 }}
-                className={`absolute ${!pipPos ? "bottom-4 right-4" : ""} z-20 ${!pipWidth ? "w-28 h-38 sm:w-36 sm:h-48" : ""
-                  } bg-zinc-950 border border-white/20 rounded-2xl shadow-2xl overflow-hidden backdrop-blur-md transition-shadow select-none group ${isDragging ? "cursor-grabbing ring-2 ring-zinc-400/40" : "cursor-pointer hover:border-white/40"
-                  }`}
+                className={`absolute ${!pipPos ? "bottom-3 right-3 sm:bottom-4 sm:right-4" : ""} z-20 ${
+                  !pipWidth ? "w-24 h-32 sm:w-32 sm:h-44 md:w-36 md:h-48 lg:w-40 lg:h-54" : ""
+                } bg-zinc-950 border border-white/20 rounded-2xl shadow-2xl overflow-hidden backdrop-blur-md transition-shadow select-none group ${
+                  isDragging ? "cursor-grabbing ring-2 ring-zinc-400/40" : "cursor-pointer hover:border-white/40"
+                }`}
               >
                 {/* Corner Pull-to-Resize Handle (Drag corner to resize camera size smoothly) */}
                 <div
@@ -2560,9 +2578,9 @@ export default function Home() {
                     e.stopPropagation();
                     startResize(e.touches[0].clientX, e.touches[0].clientY);
                   }}
-                  className="resize-handle absolute top-0 left-0 w-7 h-7 z-30 flex items-center justify-center cursor-nwse-resize text-white/50 hover:text-white transition-colors group-hover:opacity-100 opacity-60 touch-none p-1.5"
+                  className="resize-handle absolute top-0 left-0 w-6 h-6 sm:w-7 sm:h-7 z-30 flex items-center justify-center cursor-nwse-resize text-white/50 hover:text-white transition-colors group-hover:opacity-100 opacity-60 touch-none p-1 sm:p-1.5"
                 >
-                  <div className="w-2.5 h-2.5 border-t-2 border-l-2 border-white/70 rounded-tl-xs" />
+                  <div className="w-2 h-2 sm:w-2.5 sm:h-2.5 border-t-2 border-l-2 border-white/70 rounded-tl-xs" />
                 </div>
 
                 {/* Floating Video Stream: Local webcam if normal, Stranger feed if swapped */}
@@ -2572,9 +2590,11 @@ export default function Home() {
                     autoPlay
                     playsInline
                     muted
-                    className={`absolute inset-0 w-full h-full object-cover z-0 ${facingMode === "user" ? "scale-x-[-1]" : ""
-                      } pointer-events-none transition-opacity duration-200 ${!localStream || hasCameraPermission === false ? "opacity-0" : "opacity-100"
-                      }`}
+                    className={`absolute inset-0 w-full h-full object-cover z-0 ${
+                      facingMode === "user" ? "scale-x-[-1]" : ""
+                    } pointer-events-none transition-opacity duration-200 ${
+                      !localStream || hasCameraPermission === false ? "opacity-0" : "opacity-100"
+                    }`}
                   />
                 ) : (
                   <video
@@ -2583,14 +2603,15 @@ export default function Home() {
                     playsInline
                     onPlaying={() => setIsRemoteVideoPlaying(true)}
                     onLoadedData={() => setIsRemoteVideoPlaying(true)}
-                    className={`absolute inset-0 w-full h-full object-cover z-0 transition-opacity duration-300 ${status === "connected" && remoteStream ? "opacity-100" : "opacity-0 hidden"
-                      }`}
+                    className={`absolute inset-0 w-full h-full object-cover z-0 transition-opacity duration-300 ${
+                      status === "connected" && remoteStream ? "opacity-100" : "opacity-0 hidden"
+                    }`}
                   />
                 )}
 
                 {/* Subtle Mini Top-Right Tag */}
-                <div className="absolute top-2 right-2 z-10 pointer-events-none">
-                  <div className="flex items-center gap-1 bg-black/60 backdrop-blur-md px-2 py-0.5 rounded-full border border-white/10 text-white text-[9px] font-medium shadow-xs">
+                <div className="absolute top-1.5 right-1.5 sm:top-2 sm:right-2 z-10 pointer-events-none">
+                  <div className="flex items-center gap-1 bg-black/60 backdrop-blur-md px-1.5 py-0.5 rounded-full border border-white/10 text-white text-[8px] sm:text-[9px] font-medium shadow-xs">
                     {!isSwappedFeeds ? (
                       <>
                         {userGender ? (
@@ -2625,8 +2646,8 @@ export default function Home() {
                       onClick={() => setShowPermissionModal(true)}
                       className="pointer-events-auto flex flex-col items-center gap-1.5 cursor-pointer text-amber-400 hover:text-amber-300 hover:scale-105 transition-all p-1"
                     >
-                      <AlertTriangle className="w-7 h-7 text-amber-400 stroke-[1.75]" />
-                      <span className="text-[10px] font-semibold text-amber-300">Enable Cam</span>
+                      <AlertTriangle className="w-6 h-6 sm:w-7 sm:h-7 text-amber-400 stroke-[1.75]" />
+                      <span className="text-[9px] sm:text-[10px] font-semibold text-amber-300">Enable Cam</span>
                     </button>
                   </div>
                 )}
@@ -2638,10 +2659,10 @@ export default function Home() {
                       if ((e.target as HTMLElement).closest("button") || (e.target as HTMLElement).closest(".resize-handle")) return;
                       setShowPipControls(false);
                     }}
-                    className="absolute inset-0 bg-black/45 backdrop-blur-[1px] z-20 flex flex-col justify-between p-2 animate-in fade-in duration-150 cursor-pointer"
+                    className="absolute inset-0 bg-black/45 backdrop-blur-[1px] z-20 flex flex-col justify-between p-1.5 sm:p-2 animate-in fade-in duration-150 cursor-pointer"
                   >
                     {/* Top Spacer */}
-                    <div className="w-full h-4 pointer-events-none" />
+                    <div className="w-full h-3 sm:h-4 pointer-events-none" />
 
                     {/* Center Scan / Swap Feed Action Icon (Pure Borderless Clean Icon) */}
                     <div className="flex items-center justify-center my-auto">
@@ -2653,14 +2674,14 @@ export default function Home() {
                           setShowPipControls(false);
                         }}
                         title={isSwappedFeeds ? "Return Stranger to Full Screen" : "Make Your Camera Full Screen (WhatsApp Style)"}
-                        className="p-2 text-white/90 hover:text-white active:scale-90 transition-all cursor-pointer group"
+                        className="p-1 sm:p-2 text-white/90 hover:text-white active:scale-90 transition-all cursor-pointer group"
                       >
-                        <Scan className="w-10 h-10 sm:w-11 sm:h-11 text-white drop-shadow-[0_2px_10px_rgba(0,0,0,0.85)] group-hover:scale-110 transition-transform stroke-[0.5]" />
+                        <Scan className="w-8 h-8 sm:w-9 sm:h-9 md:w-11 md:h-11 text-white drop-shadow-[0_2px_10px_rgba(0,0,0,0.85)] group-hover:scale-110 transition-transform stroke-[0.75]" />
                       </button>
                     </div>
 
                     {/* Bottom Action Controls (Flip Camera + Mute Mic / Report) */}
-                    <div className="flex items-center justify-center gap-2 bg-black/60 backdrop-blur-md py-1 px-2 rounded-xl border border-white/10 mx-auto">
+                    <div className="flex items-center justify-center gap-1 sm:gap-2 bg-black/65 backdrop-blur-md py-0.5 sm:py-1 px-1.5 sm:px-2 rounded-xl border border-white/10 mx-auto">
                       {!isSwappedFeeds ? (
                         <>
                           <button
@@ -2668,21 +2689,23 @@ export default function Home() {
                             onClick={() => toggleCameraFacing()}
                             disabled={isFlippingCamera || !localStream}
                             title={`Flip Camera (Currently: ${facingMode === "user" ? "Front" : "Back"})`}
-                            className={`p-1.5 rounded-lg transition-colors cursor-pointer ${isFlippingCamera
-                              ? "text-indigo-400 animate-spin"
-                              : "text-zinc-200 hover:bg-white/15 hover:text-white"
-                              }`}
+                            className={`p-1 sm:p-1.5 rounded-lg transition-colors cursor-pointer ${
+                              isFlippingCamera
+                                ? "text-indigo-400 animate-spin"
+                                : "text-zinc-200 hover:bg-white/15 hover:text-white"
+                            }`}
                           >
-                            <SwitchCamera className="w-3.5 h-3.5" />
+                            <SwitchCamera className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
                           </button>
                           <button
                             type="button"
                             onClick={() => toggleMic()}
                             title={isMicMuted ? "Unmute Mic" : "Mute Mic"}
-                            className={`p-1.5 rounded-lg transition-colors cursor-pointer ${isMicMuted ? "bg-red-500/30 text-red-400" : "text-zinc-200 hover:bg-white/15 hover:text-white"
-                              }`}
+                            className={`p-1 sm:p-1.5 rounded-lg transition-colors cursor-pointer ${
+                              isMicMuted ? "bg-red-500/30 text-red-400" : "text-zinc-200 hover:bg-white/15 hover:text-white"
+                            }`}
                           >
-                            {isMicMuted ? <MicOff className="w-3.5 h-3.5" /> : <Mic className="w-3.5 h-3.5" />}
+                            {isMicMuted ? <MicOff className="w-3 h-3 sm:w-3.5 sm:h-3.5" /> : <Mic className="w-3 h-3 sm:w-3.5 sm:h-3.5" />}
                           </button>
                         </>
                       ) : (
@@ -2693,9 +2716,9 @@ export default function Home() {
                             setShowPipControls(false);
                           }}
                           title="Report Stranger"
-                          className="p-1 rounded-lg text-red-400 hover:bg-red-950/40 transition-colors cursor-pointer flex items-center gap-1 text-[10px] font-semibold"
+                          className="p-1 rounded-lg text-red-400 hover:bg-red-950/40 transition-colors cursor-pointer flex items-center gap-1 text-[9px] sm:text-[10px] font-semibold"
                         >
-                          <Flag className="w-3.5 h-3.5" />
+                          <Flag className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
                           <span>Report</span>
                         </button>
                       )}
