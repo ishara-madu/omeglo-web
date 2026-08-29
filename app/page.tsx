@@ -40,7 +40,6 @@ import {
 } from "lucide-react";
 import { getBrowserFingerprint } from "@/lib/fingerprint";
 import { filterMessage } from "@/lib/moderation/regexFilter";
-import { initFaceDetector, detectFace } from "@/lib/moderation/faceDetection";
 import { initNsfwDetector, checkVideoFrame } from "@/lib/moderation/nsfwDetector";
 import { initToxicityDetector, checkTextToxicity } from "@/lib/moderation/toxicityDetector";
 
@@ -371,7 +370,6 @@ export default function Home() {
   const [reportToast, setReportToast] = useState<{ show: boolean; message: string } | null>(null);
 
   // AI Moderation & Safety States (Face Detection & NSFW Shield)
-  const [showFaceModal, setShowFaceModal] = useState(false);
   const [isNsfwBlurred, setIsNsfwBlurred] = useState(false);
   const [aiModerationToast, setAiModerationToast] = useState<{
     show: boolean;
@@ -1012,7 +1010,6 @@ export default function Home() {
   useEffect(() => {
     // Pre-warm AI moderation models in background (Zero-delay readiness)
     initNsfwDetector().catch(() => {});
-    initFaceDetector().catch(() => {});
 
     // 1. Check localStorage for preferences
     try {
@@ -1336,22 +1333,11 @@ export default function Home() {
         setWeakSignalWarning(null);
       }
 
-      // 2. Strict Camera Check in Video Mode
+      // 2. Camera Check in Video Mode
       const stream = await initLocalStream();
       if (!stream || stream.getVideoTracks().length === 0) {
         setShowPermissionModal(true);
         return;
-      }
-
-      // 3. Google MediaPipe / Native Face Detection Check (Face is required for video)
-      if (localVideoRef.current) {
-        await initFaceDetector();
-        await new Promise((r) => setTimeout(r, 120));
-        const faceRes = await detectFace(localVideoRef.current);
-        if (!faceRes.hasFace) {
-          setShowFaceModal(true);
-          return;
-        }
       }
     }
 
@@ -1398,17 +1384,6 @@ export default function Home() {
       if (!stream || stream.getVideoTracks().length === 0) {
         setShowPermissionModal(true);
         return;
-      }
-
-      // Face Detection Check before skipping to next stranger
-      if (localVideoRef.current) {
-        await initFaceDetector();
-        await new Promise((r) => setTimeout(r, 100));
-        const faceRes = await detectFace(localVideoRef.current);
-        if (!faceRes.hasFace) {
-          setShowFaceModal(true);
-          return;
-        }
       }
     }
 
@@ -1861,68 +1836,6 @@ export default function Home() {
         </div>
       )}
 
-      {/* FACE DETECTION MANDATORY MODAL (GOOGLE MEDIAPIPE) */}
-      {showFaceModal && (
-        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200">
-          <div className="bg-white rounded-3xl p-6 sm:p-7 max-w-md w-full border border-zinc-200 shadow-2xl flex flex-col items-center text-center relative">
-            <button
-              onClick={() => setShowFaceModal(false)}
-              className="absolute top-4 right-4 p-1.5 rounded-full text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 transition-colors cursor-pointer"
-            >
-              <X className="w-4 h-4" />
-            </button>
-
-            <div className="w-12 h-12 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-600 mb-3.5 shadow-2xs">
-              <Camera className="w-6 h-6 stroke-[2]" />
-            </div>
-
-            <h2 className="text-lg font-bold tracking-tight text-zinc-950 mb-1">
-              Face Required for Video Chat
-            </h2>
-            <p className="text-xs text-zinc-500 mb-4 leading-relaxed max-w-xs">
-              To keep Omeglo safe, real, and fun, your face must be clearly visible in the camera before matching with strangers.
-            </p>
-
-            <div className="w-full bg-zinc-50 border border-zinc-200/80 rounded-2xl p-3.5 mb-5 text-left text-xs space-y-2 text-zinc-600">
-              <div className="flex items-center gap-2">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
-                <span>Keep your face centered and well-lit.</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
-                <span>Avoid pointing at walls, ceilings, or black screens.</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
-                <span>Or switch to <strong>Text Mode</strong> if you prefer not to show video.</span>
-              </div>
-            </div>
-
-            <div className="flex flex-col sm:flex-row items-center gap-2.5 w-full">
-              <button
-                type="button"
-                onClick={async () => {
-                  setShowFaceModal(false);
-                  handleStart();
-                }}
-                className="w-full h-11 rounded-xl bg-zinc-950 hover:bg-zinc-800 active:scale-[0.98] text-white text-xs font-semibold transition-all shadow-xs cursor-pointer flex items-center justify-center gap-2"
-              >
-                <span>Check Face & Match</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setShowFaceModal(false);
-                  handleModeChange("text");
-                }}
-                className="w-full sm:w-auto h-11 px-4 rounded-xl bg-zinc-100 hover:bg-zinc-200 text-zinc-800 text-xs font-medium transition-colors cursor-pointer"
-              >
-                Switch to Text Mode
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* FLOATING AI & MODERATION ALERT TOAST */}
       {aiModerationToast && (
