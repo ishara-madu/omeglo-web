@@ -365,11 +365,15 @@ export default function Home() {
   const [isNextDisabled, setIsNextDisabled] = useState(false);
   const nextCooldownRef = useRef<number>(0);
 
-  // Draggable PiP State, Sizing & WhatsApp-Style Feed Swapping
+  // Draggable PiP State, Dynamic Edge/Corner Resizing & WhatsApp-Style Feed Swapping
   const [pipPos, setPipPos] = useState<{ x: number; y: number } | null>(null);
+  const [pipWidth, setPipWidth] = useState<number | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [isResizing, setIsResizing] = useState(false);
+  const [showPipControls, setShowPipControls] = useState(false);
   const [isSwappedFeeds, setIsSwappedFeeds] = useState<boolean>(false);
-  const [pipSize, setPipSize] = useState<"sm" | "md" | "lg">("md");
+  const pipControlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const hasDraggedFarRef = useRef(false);
 
   // Report Modal & Notification State
   const [showReportModal, setShowReportModal] = useState(false);
@@ -422,6 +426,11 @@ export default function Home() {
     initialX: number;
     initialY: number;
   }>({ startX: 0, startY: 0, initialX: 0, initialY: 0 });
+  const resizeStartRef = useRef<{
+    startX: number;
+    startY: number;
+    initialWidth: number;
+  }>({ startX: 0, startY: 0, initialWidth: 130 });
 
   // Add system message
   const addSystemMessage = useCallback((text: string) => {
@@ -1202,33 +1211,50 @@ export default function Home() {
     }
   }, [messages, isStrangerTyping]);
 
-  // Handle Dragging Events for Floating Self View (WhatsApp style)
+  // Handle Dragging and Corner Resizing Events for Floating PiP Box
   useEffect(() => {
-    if (!isDragging) return;
+    if (!isDragging && !isResizing) return;
 
     const handlePointerMove = (e: MouseEvent | TouchEvent) => {
-      if (!containerRef.current || !pipRef.current) return;
-
       const clientX = "touches" in e ? e.touches[0].clientX : e.clientX;
       const clientY = "touches" in e ? e.touches[0].clientY : e.clientY;
 
-      const deltaX = clientX - dragStartRef.current.startX;
-      const deltaY = clientY - dragStartRef.current.startY;
+      if (isResizing) {
+        // Dragging top-left corner resize handle outwards increases width
+        const deltaX = resizeStartRef.current.startX - clientX;
+        const deltaY = resizeStartRef.current.startY - clientY;
+        const delta = Math.max(deltaX, deltaY);
+        const newWidth = Math.max(90, Math.min(320, resizeStartRef.current.initialWidth + delta));
+        setPipWidth(newWidth);
+        return;
+      }
 
-      const containerRect = containerRef.current.getBoundingClientRect();
-      const pipRect = pipRef.current.getBoundingClientRect();
+      if (isDragging) {
+        if (!containerRef.current || !pipRef.current) return;
 
-      const maxX = Math.max(0, containerRect.width - pipRect.width - 16);
-      const maxY = Math.max(0, containerRect.height - pipRect.height - 16);
+        const deltaX = clientX - dragStartRef.current.startX;
+        const deltaY = clientY - dragStartRef.current.startY;
 
-      const newX = Math.max(16, Math.min(maxX, dragStartRef.current.initialX + deltaX));
-      const newY = Math.max(16, Math.min(maxY, dragStartRef.current.initialY + deltaY));
+        if (Math.hypot(deltaX, deltaY) > 6) {
+          hasDraggedFarRef.current = true;
+        }
 
-      setPipPos({ x: newX, y: newY });
+        const containerRect = containerRef.current.getBoundingClientRect();
+        const pipRect = pipRef.current.getBoundingClientRect();
+
+        const maxX = Math.max(0, containerRect.width - pipRect.width - 12);
+        const maxY = Math.max(0, containerRect.height - pipRect.height - 12);
+
+        const newX = Math.max(12, Math.min(maxX, dragStartRef.current.initialX + deltaX));
+        const newY = Math.max(12, Math.min(maxY, dragStartRef.current.initialY + deltaY));
+
+        setPipPos({ x: newX, y: newY });
+      }
     };
 
     const handlePointerUp = () => {
       setIsDragging(false);
+      setIsResizing(false);
     };
 
     window.addEventListener("mousemove", handlePointerMove);
@@ -1242,10 +1268,11 @@ export default function Home() {
       window.removeEventListener("touchmove", handlePointerMove);
       window.removeEventListener("touchend", handlePointerUp);
     };
-  }, [isDragging]);
+  }, [isDragging, isResizing]);
 
   const startDrag = (clientX: number, clientY: number) => {
     if (!containerRef.current || !pipRef.current) return;
+    hasDraggedFarRef.current = false;
     const containerRect = containerRef.current.getBoundingClientRect();
     const pipRect = pipRef.current.getBoundingClientRect();
 
@@ -1259,6 +1286,33 @@ export default function Home() {
       initialY: currentY,
     };
     setIsDragging(true);
+  };
+
+  const startResize = (clientX: number, clientY: number) => {
+    if (!pipRef.current) return;
+    const pipRect = pipRef.current.getBoundingClientRect();
+    resizeStartRef.current = {
+      startX: clientX,
+      startY: clientY,
+      initialWidth: pipWidth || pipRect.width,
+    };
+    setIsResizing(true);
+  };
+
+  const togglePipControls = () => {
+    setShowPipControls((prev) => {
+      const next = !prev;
+      if (pipControlsTimeoutRef.current) {
+        clearTimeout(pipControlsTimeoutRef.current);
+        pipControlsTimeoutRef.current = null;
+      }
+      if (next) {
+        pipControlsTimeoutRef.current = setTimeout(() => {
+          setShowPipControls(false);
+        }, 4000);
+      }
+      return next;
+    });
   };
 
   // Get matching text for search
@@ -2450,44 +2504,57 @@ export default function Home() {
               </div>
             )}
 
-            {/* VIDEO MODE: WhatsApp-Style Floating Draggable, Resizable & Swappable PiP Video Preview */}
+            {/* VIDEO MODE: WhatsApp-Style Clean Floating PiP Video with Pull-to-Resize & Tap-to-Show Controls */}
             {chatMode === "video" && (
               <div
                 ref={pipRef}
-                style={
-                  pipPos
+                style={{
+                  ...(pipPos
                     ? {
                         left: `${pipPos.x}px`,
                         top: `${pipPos.y}px`,
                         right: "auto",
                         bottom: "auto",
                       }
-                    : undefined
-                }
+                    : {}),
+                  ...(pipWidth ? { width: `${pipWidth}px`, height: `${Math.round(pipWidth * 1.35)}px` } : {}),
+                }}
                 onMouseDown={(e) => {
-                  if ((e.target as HTMLElement).closest("button")) return;
+                  if ((e.target as HTMLElement).closest("button") || (e.target as HTMLElement).closest(".resize-handle")) return;
                   startDrag(e.clientX, e.clientY);
                 }}
                 onTouchStart={(e) => {
-                  if ((e.target as HTMLElement).closest("button")) return;
+                  if ((e.target as HTMLElement).closest("button") || (e.target as HTMLElement).closest(".resize-handle")) return;
                   startDrag(e.touches[0].clientX, e.touches[0].clientY);
                 }}
                 onClick={(e) => {
-                  if ((e.target as HTMLElement).closest("button")) return;
-                  setIsSwappedFeeds((prev) => !prev);
+                  if ((e.target as HTMLElement).closest("button") || (e.target as HTMLElement).closest(".resize-handle")) return;
+                  if (!hasDraggedFarRef.current) {
+                    togglePipControls();
+                  }
                 }}
                 className={`absolute ${!pipPos ? "bottom-4 right-4" : ""} z-20 ${
-                  pipSize === "sm"
-                    ? "w-24 h-34 sm:w-30 sm:h-40"
-                    : pipSize === "lg"
-                    ? "w-36 h-50 sm:w-48 sm:h-64"
-                    : "w-28 h-40 sm:w-38 sm:h-52"
-                } bg-zinc-950 border border-white/20 rounded-2xl shadow-2xl overflow-hidden backdrop-blur-md flex flex-col justify-between p-2 sm:p-2.5 transition-all duration-200 ${
-                  isDragging
-                    ? "cursor-grabbing ring-2 ring-zinc-400/40"
-                    : "cursor-pointer hover:border-white/40 active:scale-[0.98]"
+                  !pipWidth ? "w-28 h-38 sm:w-36 sm:h-48" : ""
+                } bg-zinc-950 border border-white/20 rounded-2xl shadow-2xl overflow-hidden backdrop-blur-md transition-shadow select-none group ${
+                  isDragging ? "cursor-grabbing ring-2 ring-zinc-400/40" : "cursor-pointer hover:border-white/40"
                 }`}
               >
+                {/* Corner Pull-to-Resize Handle (Drag corner to resize camera size smoothly) */}
+                <div
+                  title="Drag corner to resize camera"
+                  onMouseDown={(e) => {
+                    e.stopPropagation();
+                    startResize(e.clientX, e.clientY);
+                  }}
+                  onTouchStart={(e) => {
+                    e.stopPropagation();
+                    startResize(e.touches[0].clientX, e.touches[0].clientY);
+                  }}
+                  className="resize-handle absolute top-0 left-0 w-7 h-7 z-30 flex items-center justify-center cursor-nwse-resize text-white/50 hover:text-white transition-colors group-hover:opacity-100 opacity-60 touch-none p-1.5"
+                >
+                  <div className="w-2.5 h-2.5 border-t-2 border-l-2 border-white/70 rounded-tl-xs" />
+                </div>
+
                 {/* Floating Video Stream: Local webcam if normal, Stranger feed if swapped */}
                 {!isSwappedFeeds ? (
                   <video
@@ -2514,23 +2581,23 @@ export default function Home() {
                   />
                 )}
 
-                {/* Drag Handle, Label & WhatsApp Swap / Resize Controls (z-10 above video) */}
-                <div className="relative z-10 flex items-center justify-between w-full">
-                  <div className="flex items-center gap-1.5 bg-black/60 backdrop-blur-md px-2 py-0.5 rounded-full border border-white/10 text-white text-[10px] font-medium">
+                {/* Subtle Mini Top-Right Tag */}
+                <div className="absolute top-2 right-2 z-10 pointer-events-none">
+                  <div className="flex items-center gap-1 bg-black/60 backdrop-blur-md px-2 py-0.5 rounded-full border border-white/10 text-white text-[9px] font-medium shadow-xs">
                     {!isSwappedFeeds ? (
                       <>
                         {userGender ? (
-                          <div className="w-3 h-3 rounded-full overflow-hidden flex items-center justify-center">
+                          <div className="w-2.5 h-2.5 rounded-full overflow-hidden flex items-center justify-center">
                             <Image
                               src={userGender === "male" ? "/male.svg" : "/female.svg"}
                               alt={userGender}
-                              width={12}
-                              height={12}
+                              width={10}
+                              height={10}
                               className="w-full h-full object-contain"
                             />
                           </div>
                         ) : (
-                          <span className="w-1.5 h-1.5 rounded-full bg-zinc-300" />
+                          <span className="w-1 h-1 rounded-full bg-zinc-300" />
                         )}
                         <span>You</span>
                       </>
@@ -2540,38 +2607,6 @@ export default function Home() {
                         <span>Stranger</span>
                       </>
                     )}
-                  </div>
-
-                  <div className="flex items-center gap-0.5 bg-black/60 backdrop-blur-md rounded-lg p-0.5 border border-white/10">
-                    {/* Swap Feeds Button */}
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setIsSwappedFeeds((prev) => !prev);
-                      }}
-                      title={
-                        isSwappedFeeds
-                          ? "Switch main view back to Stranger"
-                          : "Switch main view to Your Camera (WhatsApp style)"
-                      }
-                      className="p-1 rounded text-zinc-300 hover:text-white hover:bg-white/15 transition-colors cursor-pointer"
-                    >
-                      <ArrowLeftRight className="w-3 h-3" />
-                    </button>
-
-                    {/* Manual Size Toggle Button */}
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setPipSize((prev) => (prev === "sm" ? "md" : prev === "md" ? "lg" : "sm"));
-                      }}
-                      title={`Resize Preview: ${pipSize.toUpperCase()} (Click to toggle Small / Medium / Large)`}
-                      className="p-1 rounded text-zinc-300 hover:text-white hover:bg-white/15 transition-colors cursor-pointer"
-                    >
-                      {pipSize === "lg" ? <Minimize2 className="w-3 h-3" /> : <Maximize2 className="w-3 h-3" />}
-                    </button>
                   </div>
                 </div>
 
@@ -2589,61 +2624,86 @@ export default function Home() {
                   </div>
                 )}
 
-                {/* Spacer when video is live */}
-                <div className="flex-1 pointer-events-none" />
+                {/* Tap-to-Show Full Action Overlay (Mic, Flip Cam & Big Center Swap Button) */}
+                {showPipControls && (
+                  <div
+                    onClick={(e) => e.stopPropagation()}
+                    className="absolute inset-0 bg-black/55 backdrop-blur-[2px] z-20 flex flex-col justify-between p-2 animate-in fade-in duration-150"
+                  >
+                    {/* Top Header inside overlay */}
+                    <div className="flex items-center justify-between w-full">
+                      <span className="text-[9px] text-zinc-300 font-semibold uppercase tracking-wider px-1">
+                        {!isSwappedFeeds ? "Your Cam" : "Stranger"}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setShowPipControls(false)}
+                        className="w-5 h-5 rounded-full bg-white/15 hover:bg-white/30 text-white flex items-center justify-center text-xs transition-colors cursor-pointer"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
 
-                {/* In-PiP Media Controls (Flip Camera & Mic Mute) */}
-                <div className="relative z-10 flex items-center justify-center gap-1 bg-black/60 backdrop-blur-md py-1 px-1.5 rounded-xl border border-white/10">
-                  {!isSwappedFeeds ? (
-                    <>
-                      {/* Flip Camera Button */}
+                    {/* Center Full-Screen / Swap Feed Action Button */}
+                    <div className="flex items-center justify-center my-auto">
                       <button
                         type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          toggleCameraFacing();
+                        onClick={() => {
+                          setIsSwappedFeeds((prev) => !prev);
+                          setShowPipControls(false);
                         }}
-                        disabled={isFlippingCamera || !localStream}
-                        title={`Flip Camera (Currently: ${facingMode === "user" ? "Front" : "Back"})`}
-                        className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
-                          isFlippingCamera
-                            ? "text-indigo-400 animate-spin"
-                            : "text-zinc-300 hover:bg-white/10 hover:text-white"
-                        }`}
+                        title={isSwappedFeeds ? "Return Stranger to Full Screen" : "Make Your Camera Full Screen"}
+                        className="w-10 h-10 rounded-full bg-white/30 hover:bg-white/50 active:scale-90 text-white flex items-center justify-center backdrop-blur-md shadow-xl border border-white/40 transition-all cursor-pointer group"
                       >
-                        <SwitchCamera className="w-3.5 h-3.5" />
+                        <ArrowLeftRight className="w-4.5 h-4.5 text-white drop-shadow group-hover:scale-110 transition-transform" />
                       </button>
-                      {/* Mute Mic Button */}
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          toggleMic();
-                        }}
-                        title={isMicMuted ? "Unmute Mic" : "Mute Mic"}
-                        className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
-                          isMicMuted ? "bg-red-500/20 text-red-400" : "text-zinc-300 hover:bg-white/10 hover:text-white"
-                        }`}
-                      >
-                        {isMicMuted ? <MicOff className="w-3.5 h-3.5" /> : <Mic className="w-3.5 h-3.5" />}
-                      </button>
-                    </>
-                  ) : (
-                    /* When feeds are swapped, show Quick Report in Stranger PiP */
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleOpenReportModal();
-                      }}
-                      title="Report Stranger"
-                      className="p-1 rounded-lg text-red-400 hover:bg-red-950/40 transition-colors cursor-pointer flex items-center gap-1 text-[10px] font-semibold"
-                    >
-                      <Flag className="w-3.5 h-3.5" />
-                      <span>Report</span>
-                    </button>
-                  )}
-                </div>
+                    </div>
+
+                    {/* Bottom Action Controls (Flip Camera + Mute Mic / Report) */}
+                    <div className="flex items-center justify-center gap-2 bg-black/60 backdrop-blur-md py-1 px-2 rounded-xl border border-white/10 mx-auto">
+                      {!isSwappedFeeds ? (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => toggleCameraFacing()}
+                            disabled={isFlippingCamera || !localStream}
+                            title={`Flip Camera (Currently: ${facingMode === "user" ? "Front" : "Back"})`}
+                            className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                              isFlippingCamera
+                                ? "text-indigo-400 animate-spin"
+                                : "text-zinc-200 hover:bg-white/15 hover:text-white"
+                            }`}
+                          >
+                            <SwitchCamera className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => toggleMic()}
+                            title={isMicMuted ? "Unmute Mic" : "Mute Mic"}
+                            className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                              isMicMuted ? "bg-red-500/30 text-red-400" : "text-zinc-200 hover:bg-white/15 hover:text-white"
+                            }`}
+                          >
+                            {isMicMuted ? <MicOff className="w-3.5 h-3.5" /> : <Mic className="w-3.5 h-3.5" />}
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            handleOpenReportModal();
+                            setShowPipControls(false);
+                          }}
+                          title="Report Stranger"
+                          className="p-1 rounded-lg text-red-400 hover:bg-red-950/40 transition-colors cursor-pointer flex items-center gap-1 text-[10px] font-semibold"
+                        >
+                          <Flag className="w-3.5 h-3.5" />
+                          <span>Report</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
