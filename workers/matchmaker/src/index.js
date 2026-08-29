@@ -745,6 +745,27 @@ export class Matchmaker {
         }
       }
 
+      // 14. Action: Purge All Traffic Stats
+      if (url.pathname === "/api/admin/purge-traffic" && request.method === "POST") {
+        try {
+          let deletedCount = 0;
+          if (this.env.DB) {
+            const res = await this.env.DB.prepare("DELETE FROM daily_traffic_stats").run();
+            deletedCount = res.meta?.changes || 0;
+          }
+          this.pendingAnalytics.clear();
+          return new Response(
+            JSON.stringify({ success: true, message: `All traffic statistics purged (${deletedCount} rows deleted).` }),
+            { headers: corsHeaders }
+          );
+        } catch (err) {
+          return new Response(JSON.stringify({ success: false, error: err.message }), {
+            status: 500,
+            headers: corsHeaders,
+          });
+        }
+      }
+
       // 8. Action: Manual 90-Day / 30-Day Cleanup Trigger
       if (url.pathname === "/api/admin/cleanup" && request.method === "POST") {
         try {

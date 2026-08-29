@@ -525,7 +525,7 @@ export default function AdminPage() {
 
   const handlePurgeReports = async (filter: "dismissed" | "resolved" | "all") => {
     const label = filter === "all" ? "ALL" : filter.toUpperCase();
-    if (!confirm(`Are you sure you want to permanently purge ${label} reports from database?`)) return;
+    if (!confirm(`⚠️ Are you sure you want to permanently delete ${label} reports from the database? This cannot be undone.`)) return;
 
     setIsLoading(true);
     try {
@@ -534,7 +534,26 @@ export default function AdminPage() {
         body: JSON.stringify({ filter }),
       });
       if (data.success) {
-        showToast(data.message);
+        showToast(data.message || "Reports purged successfully.");
+        loadData(true);
+      }
+    } catch (err: any) {
+      showToast(err.message, "error");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handlePurgeTrafficStats = async () => {
+    if (!confirm("⚠️ Are you sure you want to permanently delete ALL traffic statistics, charts history, and engagement records? All stats will be reset to 0.")) return;
+
+    setIsLoading(true);
+    try {
+      const data = await apiFetch("/api/admin/purge-traffic", {
+        method: "POST",
+      });
+      if (data.success) {
+        showToast(data.message || "All traffic statistics deleted.");
         loadData(true);
       }
     } catch (err: any) {
@@ -1081,6 +1100,17 @@ export default function AdminPage() {
                     </button>
                   ))}
                 </div>
+
+                {/* Quick Purge All Stats Button */}
+                <button
+                  onClick={handlePurgeTrafficStats}
+                  disabled={isLoading}
+                  title="Permanently delete all recorded statistics and reset to zero"
+                  className="px-3 py-1.5 rounded-xl bg-red-950/80 hover:bg-red-900 border border-red-800/60 text-red-300 text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shadow-xs disabled:opacity-50"
+                >
+                  <Trash2 className="w-3.5 h-3.5 text-red-400" />
+                  <span>Purge All Stats</span>
+                </button>
               </div>
             </div>
 
@@ -1296,7 +1326,7 @@ export default function AdminPage() {
                   ))}
                 </div>
 
-                {/* Quick Purge Menu */}
+                {/* Quick Purge Buttons */}
                 <button
                   onClick={() => handlePurgeReports("dismissed")}
                   title="Purge all dismissed reports"
@@ -1304,6 +1334,16 @@ export default function AdminPage() {
                 >
                   <Trash2 className="w-3.5 h-3.5" />
                   <span>Purge Dismissed</span>
+                </button>
+
+                <button
+                  onClick={() => handlePurgeReports("all")}
+                  disabled={isLoading}
+                  title="Permanently wipe all reports from database"
+                  className="px-3 py-1.5 rounded-xl bg-red-950/80 hover:bg-red-900 border border-red-800/60 text-red-300 text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shadow-xs disabled:opacity-50"
+                >
+                  <Trash2 className="w-3.5 h-3.5 text-red-400" />
+                  <span>Purge All Reports</span>
                 </button>
               </div>
             </div>
@@ -1662,20 +1702,81 @@ export default function AdminPage() {
                 </button>
               </div>
 
+              {/* 1. Purge All Traffic Statistics Card */}
               <div className="p-4 rounded-2xl bg-zinc-950 border border-zinc-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                 <div>
-                  <h3 className="text-sm font-semibold text-red-400">Purge All Reports Data</h3>
+                  <h3 className="text-sm font-semibold text-red-400 flex items-center gap-2">
+                    <BarChart3 className="w-4 h-4 text-cyan-400" />
+                    <span>Purge All Statistics Data (ස්ටැටික්ස් ඩිලිට් කිරීම)</span>
+                  </h3>
                   <p className="text-xs text-zinc-400 mt-0.5">
-                    Wipes all logged reports from D1 database (resets reports count to 0).
+                    Permanently wipes all daily visitor volumes, video & text call metrics, durations, and timeline charts (resets stats to 0).
+                  </p>
+                </div>
+                <button
+                  onClick={handlePurgeTrafficStats}
+                  disabled={isLoading}
+                  className="px-4 py-2.5 rounded-xl bg-red-950/80 hover:bg-red-900 border border-red-800/60 text-red-300 text-xs font-bold transition-all cursor-pointer flex items-center gap-2 shadow-xs disabled:opacity-50 shrink-0"
+                >
+                  <Trash2 className="w-3.5 h-3.5 text-red-400" />
+                  <span>Purge All Traffic Stats</span>
+                </button>
+              </div>
+
+              {/* 2. Purge All Reports Card */}
+              <div className="p-4 rounded-2xl bg-zinc-950 border border-zinc-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <div>
+                  <h3 className="text-sm font-semibold text-red-400 flex items-center gap-2">
+                    <ShieldAlert className="w-4 h-4 text-red-400" />
+                    <span>Purge All Reports Data (රිපෝට් ඩිලිට් කිරීම)</span>
+                  </h3>
+                  <p className="text-xs text-zinc-400 mt-0.5">
+                    Wipes all logged user violation reports, device snapshots, and report logs from D1 database (resets reports count to 0).
                   </p>
                 </div>
                 <button
                   onClick={() => handlePurgeReports("all")}
                   disabled={isLoading}
-                  className="px-4 py-2.5 rounded-xl bg-red-950/80 hover:bg-red-900 border border-red-800/60 text-red-300 text-xs font-bold transition-all cursor-pointer flex items-center gap-2 shadow-xs disabled:opacity-50"
+                  className="px-4 py-2.5 rounded-xl bg-red-950/80 hover:bg-red-900 border border-red-800/60 text-red-300 text-xs font-bold transition-all cursor-pointer flex items-center gap-2 shadow-xs disabled:opacity-50 shrink-0"
                 >
                   <Trash2 className="w-3.5 h-3.5 text-red-400" />
                   <span>Purge All Reports</span>
+                </button>
+              </div>
+
+              {/* 3. Manual 90-Day Auto Cleanup Card */}
+              <div className="p-4 rounded-2xl bg-zinc-950 border border-zinc-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <div>
+                  <h3 className="text-sm font-semibold text-white">Manual 90-Day Auto Cleanup</h3>
+                  <p className="text-xs text-zinc-400 mt-0.5">
+                    Deletes reports, traffic analytics, and inactive reputation records older than 90 days.
+                  </p>
+                </div>
+                <button
+                  onClick={() => handleTriggerCleanup(90)}
+                  disabled={isLoading}
+                  className="px-4 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white text-xs font-bold transition-all cursor-pointer flex items-center gap-2 shadow-xs disabled:opacity-50 shrink-0"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Execute Cleanup (90 Days)</span>
+                </button>
+              </div>
+
+              {/* 4. Aggressive 30-Day Purge Card */}
+              <div className="p-4 rounded-2xl bg-zinc-950 border border-zinc-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <div>
+                  <h3 className="text-sm font-semibold text-white">Aggressive 30-Day Purge</h3>
+                  <p className="text-xs text-zinc-400 mt-0.5">
+                    Free up D1 storage by purging reports and traffic stats older than 30 days.
+                  </p>
+                </div>
+                <button
+                  onClick={() => handleTriggerCleanup(30)}
+                  disabled={isLoading}
+                  className="px-4 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-amber-300 text-xs font-bold transition-all cursor-pointer flex items-center gap-2 shadow-xs disabled:opacity-50 shrink-0"
+                >
+                  <Trash2 className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Execute Purge (30 Days)</span>
                 </button>
               </div>
             </div>
