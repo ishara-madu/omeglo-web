@@ -24,6 +24,7 @@ import {
   ChevronRight,
   Eye,
   X,
+  Check,
 } from "lucide-react";
 
 const BACKEND_URL =
@@ -106,6 +107,7 @@ export default function AdminPage() {
   // Search & Filter
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [reasonFilter, setReasonFilter] = useState<string>("all");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
 
   // Selected Report Detail Modal
   const [selectedReport, setSelectedReport] = useState<ReportItem | null>(null);
@@ -235,16 +237,67 @@ export default function AdminPage() {
   };
 
   // Actions
-  const handleUnban = async (identifier: string) => {
-    if (!confirm(`Are you sure you want to release ${identifier} back to the Clean Pool?`)) return;
+  const handleReleaseUser = async (params: {
+    identifier?: string;
+    reportId?: string;
+    deviceId?: string;
+    ip?: string;
+  }) => {
+    const targetLabel = params.identifier || params.deviceId || params.ip || params.reportId;
+    if (!confirm(`Release ${targetLabel} back to Clean Matchmaking Pool?`)) return;
+
     try {
       const data = await apiFetch("/api/admin/unban", {
         method: "POST",
-        body: JSON.stringify({ identifier }),
+        body: JSON.stringify(params),
       });
       if (data.success) {
         showToast(data.message || "User released to Clean Pool.");
+        // Optimistically update local reports & quarantine
+        if (params.reportId) {
+          setReports((prev) =>
+            prev.map((r) => (r.id === params.reportId ? { ...r, status: "resolved" } : r))
+          );
+        }
         loadData();
+        setSelectedReport(null);
+      }
+    } catch (err: any) {
+      showToast(err.message, "error");
+    }
+  };
+
+  const handleDismissReport = async (reportId: string, identifier?: string) => {
+    try {
+      const data = await apiFetch("/api/admin/dismiss-report", {
+        method: "POST",
+        body: JSON.stringify({ reportId, releaseUser: true, identifier }),
+      });
+      if (data.success) {
+        showToast("Report dismissed successfully.");
+        setReports((prev) =>
+          prev.map((r) => (r.id === reportId ? { ...r, status: "dismissed" } : r))
+        );
+        loadData();
+        setSelectedReport(null);
+      }
+    } catch (err: any) {
+      showToast(err.message, "error");
+    }
+  };
+
+  const handleDeleteReport = async (reportId: string) => {
+    if (!confirm("Permanently delete this report from database?")) return;
+    try {
+      const data = await apiFetch("/api/admin/delete-report", {
+        method: "POST",
+        body: JSON.stringify({ reportId }),
+      });
+      if (data.success) {
+        showToast("Report permanently deleted.");
+        setReports((prev) => prev.filter((r) => r.id !== reportId));
+        loadData();
+        setSelectedReport(null);
       }
     } catch (err: any) {
       showToast(err.message, "error");
@@ -275,22 +328,6 @@ export default function AdminPage() {
     }
   };
 
-  const handleDismissReport = async (reportId: string) => {
-    try {
-      const data = await apiFetch("/api/admin/dismiss-report", {
-        method: "POST",
-        body: JSON.stringify({ reportId }),
-      });
-      if (data.success) {
-        showToast("Report marked as dismissed.");
-        loadData();
-        setSelectedReport(null);
-      }
-    } catch (err: any) {
-      showToast(err.message, "error");
-    }
-  };
-
   const handleTriggerCleanup = async (days: number = 90) => {
     if (!confirm(`Run cleanup for records older than ${days} days?`)) return;
     setIsLoading(true);
@@ -313,13 +350,19 @@ export default function AdminPage() {
   // Filtered reports
   const filteredReports = reports.filter((r) => {
     const matchesReason = reasonFilter === "all" || r.reason === reasonFilter;
+    const matchesStatus =
+      statusFilter === "all" ||
+      (statusFilter === "active" && (r.status === "quarantined" || !r.status)) ||
+      (statusFilter === "dismissed" && r.status === "dismissed") ||
+      (statusFilter === "resolved" && r.status === "resolved");
+
     const matchesSearch =
       !searchQuery ||
       r.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
       r.ip_address?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       r.reported_device_id?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       r.details?.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesReason && matchesSearch;
+    return matchesReason && matchesStatus && matchesSearch;
   });
 
   // =========================================================================
@@ -421,7 +464,6 @@ export default function AdminPage() {
         </div>
 
         <div className="flex items-center gap-2 sm:gap-3">
-          {/* Cloudflare Worker Status Pill */}
           <div className="hidden sm:flex items-center gap-2 px-3 py-1 rounded-full bg-zinc-900 border border-zinc-800 text-[11px] text-zinc-400 font-mono">
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
             <span>Cloudflare D1 Live</span>
@@ -601,47 +643,72 @@ export default function AdminPage() {
         {activeTab === "reports" && (
           <div className="space-y-4 animate-in fade-in duration-200">
             {/* Search & Filter Bar */}
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-zinc-900/60 border border-zinc-800/80 rounded-2xl p-3">
-              <div className="relative w-full sm:w-80">
+            <div className="flex flex-col lg:flex-row items-center justify-between gap-3 bg-zinc-900/60 border border-zinc-800/80 rounded-2xl p-3">
+              <div className="relative w-full lg:w-72">
                 <Search className="w-4 h-4 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
                 <input
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search IP, Device ID, or Details..."
+                  placeholder="Search IP, Device, Details..."
                   className="w-full h-9 pl-9 pr-3 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-white placeholder:text-zinc-600 focus:outline-none focus:border-zinc-600"
                 />
               </div>
 
-              <div className="flex items-center gap-2 w-full sm:w-auto overflow-x-auto">
-                {["all", "nudity", "harassment", "spam", "underage", "other"].map((r) => (
-                  <button
-                    key={r}
-                    onClick={() => setReasonFilter(r)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-medium capitalize transition-colors cursor-pointer whitespace-nowrap ${
-                      reasonFilter === r
-                        ? "bg-zinc-800 text-white border border-zinc-700"
-                        : "text-zinc-500 hover:text-zinc-300"
-                    }`}
-                  >
-                    {r}
-                  </button>
-                ))}
+              <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto">
+                {/* Status Filter */}
+                <div className="flex items-center bg-zinc-950 border border-zinc-800 rounded-xl p-0.5 text-xs">
+                  {[
+                    { id: "all", label: "All Status" },
+                    { id: "active", label: "Quarantined" },
+                    { id: "dismissed", label: "Dismissed" },
+                    { id: "resolved", label: "Resolved" },
+                  ].map((s) => (
+                    <button
+                      key={s.id}
+                      onClick={() => setStatusFilter(s.id)}
+                      className={`px-2.5 py-1 rounded-lg font-medium transition-colors cursor-pointer text-[11px] ${
+                        statusFilter === s.id
+                          ? "bg-zinc-800 text-white font-bold"
+                          : "text-zinc-500 hover:text-zinc-300"
+                      }`}
+                    >
+                      {s.label}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Reason Filter */}
+                <div className="flex items-center gap-1 overflow-x-auto">
+                  {["all", "nudity", "harassment", "spam", "underage"].map((r) => (
+                    <button
+                      key={r}
+                      onClick={() => setReasonFilter(r)}
+                      className={`px-2.5 py-1 rounded-lg text-[11px] font-medium capitalize transition-colors cursor-pointer whitespace-nowrap ${
+                        reasonFilter === r
+                          ? "bg-zinc-800 text-white border border-zinc-700 font-bold"
+                          : "text-zinc-500 hover:text-zinc-300"
+                      }`}
+                    >
+                      {r}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
 
             {/* Reports Table */}
-            <div className="bg-zinc-900/60 border border-zinc-800/80 rounded-2xl overflow-hidden">
+            <div className="bg-zinc-900/60 border border-zinc-800/80 rounded-2xl overflow-hidden shadow-xs">
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs">
                   <thead className="bg-zinc-950/80 border-b border-zinc-800/80 text-zinc-400 font-medium uppercase tracking-wider text-[10px]">
                     <tr>
-                      <th className="p-3.5">Report ID</th>
+                      <th className="p-3.5">Status</th>
                       <th className="p-3.5">Reason</th>
                       <th className="p-3.5">Reported Identifier</th>
                       <th className="p-3.5">Details</th>
                       <th className="p-3.5">Timestamp</th>
-                      <th className="p-3.5 text-right">Actions</th>
+                      <th className="p-3.5 text-right">Moderation Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-zinc-800/50 text-zinc-300">
@@ -652,50 +719,116 @@ export default function AdminPage() {
                         </td>
                       </tr>
                     ) : (
-                      filteredReports.map((report) => (
-                        <tr key={report.id} className="hover:bg-zinc-800/30 transition-colors">
-                          <td className="p-3.5 font-mono text-zinc-400 text-[11px]">
-                            {report.id.slice(0, 10)}...
-                          </td>
-                          <td className="p-3.5">
-                            <span
-                              className={`px-2 py-0.5 rounded-md font-semibold text-[10px] uppercase tracking-wider ${
-                                report.reason === "nudity"
-                                  ? "bg-red-950/80 text-red-300 border border-red-800/50"
-                                  : report.reason === "harassment"
-                                  ? "bg-amber-950/80 text-amber-300 border border-amber-800/50"
-                                  : "bg-zinc-800 text-zinc-300"
-                              }`}
-                            >
-                              {report.reason}
-                            </span>
-                          </td>
-                          <td className="p-3.5 font-mono text-zinc-300 text-[11px]">
-                            <div>IP: {report.ip_address || "unknown"}</div>
-                            <div className="text-zinc-500 text-[10px]">Dev: {report.reported_device_id?.slice(0, 12)}...</div>
-                          </td>
-                          <td className="p-3.5 text-zinc-400 max-w-xs truncate">
-                            {report.details || "No custom note"}
-                          </td>
-                          <td className="p-3.5 text-zinc-500 text-[11px] whitespace-nowrap">
-                            {new Date(report.created_at).toLocaleString()}
-                          </td>
-                          <td className="p-3.5 text-right space-x-1.5 whitespace-nowrap">
-                            <button
-                              onClick={() => setSelectedReport(report)}
-                              className="px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-[11px] font-medium transition-colors cursor-pointer"
-                            >
-                              Inspect
-                            </button>
-                            <button
-                              onClick={() => handleUnban(report.reported_device_id || report.ip_address)}
-                              className="px-2.5 py-1 rounded-lg bg-emerald-950/80 hover:bg-emerald-900 text-emerald-300 text-[11px] font-medium transition-colors cursor-pointer"
-                            >
-                              Release
-                            </button>
-                          </td>
-                        </tr>
-                      ))
+                      filteredReports.map((report) => {
+                        const isDismissed = report.status === "dismissed";
+                        const isResolved = report.status === "resolved";
+                        const isQuarantined = !isDismissed && !isResolved;
+
+                        return (
+                          <tr key={report.id} className="hover:bg-zinc-800/30 transition-colors">
+                            {/* Status Badge */}
+                            <td className="p-3.5 whitespace-nowrap">
+                              {isDismissed ? (
+                                <span className="px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-400 text-[10px] font-semibold border border-zinc-700">
+                                  Dismissed
+                                </span>
+                              ) : isResolved ? (
+                                <span className="px-2 py-0.5 rounded-full bg-emerald-950/80 text-emerald-300 text-[10px] font-semibold border border-emerald-800/60 flex items-center gap-1 w-fit">
+                                  <Check className="w-2.5 h-2.5" /> Resolved
+                                </span>
+                              ) : (
+                                <span className="px-2 py-0.5 rounded-full bg-purple-950 text-purple-300 text-[10px] font-semibold border border-purple-800/60 flex items-center gap-1 w-fit">
+                                  <Clock className="w-2.5 h-2.5" /> Quarantined
+                                </span>
+                              )}
+                            </td>
+
+                            {/* Reason */}
+                            <td className="p-3.5 whitespace-nowrap">
+                              <span
+                                className={`px-2 py-0.5 rounded-md font-bold text-[10px] uppercase tracking-wider ${
+                                  report.reason === "nudity"
+                                    ? "bg-red-950/80 text-red-300 border border-red-800/50"
+                                    : report.reason === "harassment"
+                                    ? "bg-amber-950/80 text-amber-300 border border-amber-800/50"
+                                    : "bg-zinc-800 text-zinc-300"
+                                }`}
+                              >
+                                {report.reason}
+                              </span>
+                            </td>
+
+                            {/* Identifier */}
+                            <td className="p-3.5 font-mono text-zinc-300 text-[11px]">
+                              <div>IP: {report.ip_address || "unknown"}</div>
+                              <div className="text-zinc-500 text-[10px]">
+                                Dev: {report.reported_device_id ? `${report.reported_device_id.slice(0, 14)}...` : "unknown"}
+                              </div>
+                            </td>
+
+                            {/* Details */}
+                            <td className="p-3.5 text-zinc-400 max-w-xs truncate">
+                              {report.details || "No custom note"}
+                            </td>
+
+                            {/* Timestamp */}
+                            <td className="p-3.5 text-zinc-500 text-[11px] whitespace-nowrap">
+                              {new Date(report.created_at).toLocaleString()}
+                            </td>
+
+                            {/* Action Buttons */}
+                            <td className="p-3.5 text-right space-x-1.5 whitespace-nowrap">
+                              {/* Release / Unban Button */}
+                              <button
+                                onClick={() =>
+                                  handleReleaseUser({
+                                    reportId: report.id,
+                                    deviceId: report.reported_device_id,
+                                    ip: report.ip_address,
+                                  })
+                                }
+                                title="Release user from quarantine & resolve report"
+                                className="px-2.5 py-1 rounded-lg bg-emerald-950/80 hover:bg-emerald-900 text-emerald-300 text-[11px] font-semibold border border-emerald-800/40 transition-colors cursor-pointer"
+                              >
+                                Release
+                              </button>
+
+                              {/* Dismiss Button */}
+                              {!isDismissed && (
+                                <button
+                                  onClick={() =>
+                                    handleDismissReport(
+                                      report.id,
+                                      report.reported_device_id || report.ip_address
+                                    )
+                                  }
+                                  title="Dismiss false report"
+                                  className="px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-[11px] font-medium border border-zinc-700 transition-colors cursor-pointer"
+                                >
+                                  Dismiss
+                                </button>
+                              )}
+
+                              {/* Inspect Button */}
+                              <button
+                                onClick={() => setSelectedReport(report)}
+                                className="px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-300 text-[11px] font-medium border border-zinc-800 transition-colors cursor-pointer"
+                              >
+                                Inspect
+                              </button>
+
+                              {/* Delete Button */}
+                              <button
+                                onClick={() => handleDeleteReport(report.id)}
+                                title="Delete report permanently"
+                                className="p-1 rounded-lg text-zinc-500 hover:text-red-400 hover:bg-red-950/40 transition-colors cursor-pointer"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })
                     )}
                   </tbody>
                 </table>
@@ -751,8 +884,8 @@ export default function AdminPage() {
                         </td>
                         <td className="p-3.5 text-right">
                           <button
-                            onClick={() => handleUnban(item.identifier)}
-                            className="px-3 py-1 rounded-lg bg-emerald-950/80 hover:bg-emerald-900 text-emerald-300 text-xs font-semibold transition-colors cursor-pointer"
+                            onClick={() => handleReleaseUser({ identifier: item.identifier })}
+                            className="px-3 py-1.5 rounded-lg bg-emerald-950/80 hover:bg-emerald-900 text-emerald-300 text-xs font-semibold border border-emerald-800/60 transition-colors cursor-pointer"
                           >
                             Release to Clean Pool
                           </button>
@@ -816,7 +949,7 @@ export default function AdminPage() {
                         </td>
                         <td className="p-3.5 text-right">
                           <button
-                            onClick={() => handleUnban(ban.identifier)}
+                            onClick={() => handleReleaseUser({ identifier: ban.identifier })}
                             className="px-3 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-semibold transition-colors cursor-pointer"
                           >
                             Remove Ban
@@ -906,6 +1039,10 @@ export default function AdminPage() {
 
             <div className="bg-zinc-950 rounded-2xl p-4 border border-zinc-800/80 space-y-2.5 text-xs text-zinc-300">
               <div className="flex justify-between pb-1.5 border-b border-zinc-800/60">
+                <span className="text-zinc-500">Status:</span>
+                <span className="font-mono text-white uppercase">{selectedReport.status || "quarantined"}</span>
+              </div>
+              <div className="flex justify-between pb-1.5 border-b border-zinc-800/60">
                 <span className="text-zinc-500">IP Address:</span>
                 <span className="font-mono text-white">{selectedReport.ip_address}</span>
               </div>
@@ -937,22 +1074,40 @@ export default function AdminPage() {
               </div>
             </div>
 
-            <div className="flex items-center justify-end gap-2.5 pt-2">
+            <div className="flex items-center justify-between gap-2.5 pt-2">
               <button
-                onClick={() => handleDismissReport(selectedReport.id)}
-                className="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-semibold transition-colors cursor-pointer"
+                onClick={() => handleDeleteReport(selectedReport.id)}
+                className="px-3.5 py-2 rounded-xl bg-red-950/60 hover:bg-red-900/80 text-red-300 text-xs font-semibold border border-red-800/40 transition-colors cursor-pointer flex items-center gap-1.5"
               >
-                Dismiss Report
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Delete</span>
               </button>
-              <button
-                onClick={() => {
-                  handleUnban(selectedReport.reported_device_id || selectedReport.ip_address);
-                  setSelectedReport(null);
-                }}
-                className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-colors cursor-pointer"
-              >
-                Release to Clean Pool
-              </button>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() =>
+                    handleDismissReport(
+                      selectedReport.id,
+                      selectedReport.reported_device_id || selectedReport.ip_address
+                    )
+                  }
+                  className="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-semibold transition-colors cursor-pointer"
+                >
+                  Dismiss Report
+                </button>
+                <button
+                  onClick={() =>
+                    handleReleaseUser({
+                      reportId: selectedReport.id,
+                      deviceId: selectedReport.reported_device_id,
+                      ip: selectedReport.ip_address,
+                    })
+                  }
+                  className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-colors cursor-pointer"
+                >
+                  Release to Clean Pool
+                </button>
+              </div>
             </div>
           </div>
         </div>

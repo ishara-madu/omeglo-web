@@ -187,32 +187,65 @@ export class Matchmaker {
         return new Response(JSON.stringify({ success: true, bans }), { headers: corsHeaders });
       }
 
-      // 5. Action: Release / Unban User (Reset reputation to clean pool)
+      // 5. Action: Release / Unban User (Reset reputation to clean pool & resolve report)
       if (url.pathname === "/api/admin/unban" && request.method === "POST") {
         try {
           const body = await request.json();
-          const identifier = body?.identifier;
-          if (!identifier) {
-            return new Response(JSON.stringify({ success: false, error: "Identifier is required" }), {
+          const { identifier, reportId, deviceId, ip } = body || {};
+          const targetId = identifier || deviceId || ip;
+
+          if (!targetId && !reportId) {
+            return new Response(JSON.stringify({ success: false, error: "Identifier or Report ID is required" }), {
               status: 400,
               headers: corsHeaders,
             });
           }
 
           if (this.env.DB) {
-            await this.env.DB.prepare(
-              "UPDATE user_reputation SET is_quarantined = 0, quarantined_until = NULL, report_count = 0 WHERE identifier = ?"
-            )
-              .bind(identifier)
-              .run();
+            if (targetId) {
+              await this.env.DB.prepare(
+                "UPDATE user_reputation SET is_quarantined = 0, quarantined_until = NULL, report_count = 0 WHERE identifier = ?"
+              )
+                .bind(targetId)
+                .run();
 
-            await this.env.DB.prepare("DELETE FROM banned_users WHERE identifier = ?")
-              .bind(identifier)
-              .run();
+              await this.env.DB.prepare("DELETE FROM banned_users WHERE identifier = ?")
+                .bind(targetId)
+                .run();
+            }
+
+            if (deviceId && deviceId !== targetId) {
+              await this.env.DB.prepare(
+                "UPDATE user_reputation SET is_quarantined = 0, quarantined_until = NULL, report_count = 0 WHERE identifier = ?"
+              )
+                .bind(deviceId)
+                .run();
+            }
+
+            if (ip && ip !== targetId) {
+              await this.env.DB.prepare(
+                "UPDATE user_reputation SET is_quarantined = 0, quarantined_until = NULL, report_count = 0 WHERE identifier = ?"
+              )
+                .bind(ip)
+                .run();
+            }
+
+            // Also mark associated report(s) as resolved
+            if (reportId) {
+              await this.env.DB.prepare("UPDATE reports SET status = 'resolved' WHERE id = ?")
+                .bind(reportId)
+                .run();
+            } else if (targetId) {
+              await this.env.DB.prepare(
+                "UPDATE reports SET status = 'resolved' WHERE reported_device_id = ? OR ip_address = ?"
+              )
+                .bind(targetId, targetId)
+                .run();
+            }
           }
 
           return new Response(
-            JSON.stringify({ success: true, message: `Identifier ${identifier} successfully released to Clean Pool.` }),
+            JSON.stringify({ success: true, message: `User released to Clean Pool and report marked as resolved.` }),
             { headers: corsHeaders }
           );
         } catch (err) {
@@ -283,13 +316,42 @@ export class Matchmaker {
       if (url.pathname === "/api/admin/dismiss-report" && request.method === "POST") {
         try {
           const body = await request.json();
-          const reportId = body?.reportId;
+          const { reportId, releaseUser, identifier } = body || {};
           if (this.env.DB && reportId) {
             await this.env.DB.prepare("UPDATE reports SET status = 'dismissed' WHERE id = ?")
               .bind(reportId)
               .run();
+
+            if (releaseUser && identifier) {
+              await this.env.DB.prepare(
+                "UPDATE user_reputation SET is_quarantined = 0, quarantined_until = NULL, report_count = 0 WHERE identifier = ?"
+              )
+                .bind(identifier)
+                .run();
+            }
           }
-          return new Response(JSON.stringify({ success: true, message: "Report dismissed." }), {
+          return new Response(JSON.stringify({ success: true, message: "Report dismissed successfully." }), {
+            headers: corsHeaders,
+          });
+        } catch (err) {
+          return new Response(JSON.stringify({ success: false, error: err.message }), {
+            status: 500,
+            headers: corsHeaders,
+          });
+        }
+      }
+
+      // 8. Action: Delete a report permanently
+      if (url.pathname === "/api/admin/delete-report" && request.method === "POST") {
+        try {
+          const body = await request.json();
+          const reportId = body?.reportId;
+          if (this.env.DB && reportId) {
+            await this.env.DB.prepare("DELETE FROM reports WHERE id = ?")
+              .bind(reportId)
+              .run();
+          }
+          return new Response(JSON.stringify({ success: true, message: "Report permanently deleted." }), {
             headers: corsHeaders,
           });
         } catch (err) {
