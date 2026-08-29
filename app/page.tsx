@@ -490,68 +490,14 @@ export default function Home() {
       return res;
     }
 
-    // 2. Fallback latency check probe
-    try {
-      const start = performance.now();
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 2500);
-
-      await fetch("/site.webmanifest?ping=" + Date.now(), {
-        method: "HEAD",
-        signal: controller.signal,
-        cache: "no-store",
-      });
-      clearTimeout(timeoutId);
-      const latency = Math.round(performance.now() - start);
-
-      if (latency > 1800) {
-        const res = {
-          quality: "poor" as NetworkQuality,
-          downlink: 0.2,
-          rtt: latency,
-          reason: "High network latency (> 1800ms). (සිග්නල් දුර්වලයි)",
-        };
-        setNetworkQuality("poor");
-        setNetworkStats(res);
-        return res;
-      }
-
-      if (latency > 600) {
-        const res = {
-          quality: "fair" as NetworkQuality,
-          downlink: 0.6,
-          rtt: latency,
-          reason: "Weak connection detected. Minimum speed reached.",
-        };
-        setNetworkQuality("fair");
-        setNetworkStats(res);
-        return res;
-      }
-
-      const res = { quality: "good" as NetworkQuality, downlink: 5, rtt: latency };
-      setNetworkQuality("good");
-      setNetworkStats(res);
-      return res;
-    } catch (e: any) {
-      if (e?.name === "AbortError") {
-        const res = {
-          quality: "poor" as NetworkQuality,
-          downlink: 0.1,
-          rtt: 3000,
-          reason: "Connection timed out. Signal too weak.",
-        };
-        setNetworkQuality("poor");
-        setNetworkStats(res);
-        return res;
-      }
-      const res = { quality: "fair" as NetworkQuality, downlink: 1, rtt: 300 };
-      setNetworkQuality("fair");
-      setNetworkStats(res);
-      return res;
-    }
+    // 2. Default browser online state (zero HTTP requests)
+    const res = { quality: "good" as NetworkQuality, downlink: 10, rtt: 50 };
+    setNetworkQuality("good");
+    setNetworkStats(res);
+    return res;
   }, []);
 
-  // Monitor network connection changes in background
+  // Monitor network connection changes in background (Event-driven, 0 HTTP overhead)
   useEffect(() => {
     assessNetworkQuality();
 
@@ -573,15 +519,12 @@ export default function Home() {
       conn.addEventListener("change", handleOnline);
     }
 
-    const interval = setInterval(assessNetworkQuality, 12000);
-
     return () => {
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("offline", handleOffline);
       if (conn && conn.removeEventListener) {
         conn.removeEventListener("change", handleOnline);
       }
-      clearInterval(interval);
     };
   }, [assessNetworkQuality]);
 
