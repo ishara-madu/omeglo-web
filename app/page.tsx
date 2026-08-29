@@ -698,7 +698,7 @@ export default function Home() {
           } else if (toxRes.isToxic) {
             showModerationAlert("⚠️ Warning: Inappropriate language detected from stranger.", "warning");
           }
-        }).catch(() => {});
+        }).catch(() => { });
 
         setMessages((prev) => [
           ...prev,
@@ -971,7 +971,7 @@ export default function Home() {
   // Initialize Socket.io and PeerJS
   useEffect(() => {
     // Pre-warm text toxicity AI moderation model in background
-    initToxicityDetector().catch(() => {});
+    initToxicityDetector().catch(() => { });
 
     // 1. Check localStorage for preferences
     try {
@@ -1789,13 +1789,12 @@ export default function Home() {
       {/* FLOATING AI & MODERATION ALERT TOAST */}
       {aiModerationToast && (
         <div
-          className={`fixed top-5 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-full backdrop-blur-md border shadow-2xl flex items-center gap-2 text-xs font-medium animate-in fade-in slide-in-from-top-3 ${
-            aiModerationToast.type === "error"
-              ? "bg-red-950/90 text-red-200 border-red-500/40"
-              : aiModerationToast.type === "warning"
+          className={`fixed top-5 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-full backdrop-blur-md border shadow-2xl flex items-center gap-2 text-xs font-medium animate-in fade-in slide-in-from-top-3 ${aiModerationToast.type === "error"
+            ? "bg-red-950/90 text-red-200 border-red-500/40"
+            : aiModerationToast.type === "warning"
               ? "bg-amber-950/90 text-amber-200 border-amber-500/40"
               : "bg-zinc-950/90 text-white border-white/20"
-          }`}
+            }`}
         >
           <AlertTriangle className="w-4 h-4 shrink-0 text-amber-400" />
           <span>{aiModerationToast.message}</span>
@@ -2007,11 +2006,10 @@ export default function Home() {
                     key={item.id}
                     type="button"
                     onClick={() => setReportReason(item.id)}
-                    className={`w-full p-3 rounded-xl border text-left flex items-center justify-between gap-3 transition-all cursor-pointer ${
-                      isSelected
-                        ? "border-zinc-950 bg-zinc-50 ring-1 ring-zinc-950 shadow-2xs"
-                        : "border-zinc-200 hover:border-zinc-300 hover:bg-zinc-50/50"
-                    }`}
+                    className={`w-full p-3 rounded-xl border text-left flex items-center justify-between gap-3 transition-all cursor-pointer ${isSelected
+                      ? "border-zinc-950 bg-zinc-50 ring-1 ring-zinc-950 shadow-2xs"
+                      : "border-zinc-200 hover:border-zinc-300 hover:bg-zinc-50/50"
+                      }`}
                   >
                     <div className="flex-1 min-w-0">
                       <div className="text-xs font-semibold text-zinc-900 leading-snug">
@@ -2022,11 +2020,10 @@ export default function Home() {
                       </div>
                     </div>
                     <div
-                      className={`w-4 h-4 rounded-full border flex items-center justify-center transition-colors shrink-0 ${
-                        isSelected
-                          ? "border-zinc-950 bg-zinc-950 text-white"
-                          : "border-zinc-300 bg-white"
-                      }`}
+                      className={`w-4 h-4 rounded-full border flex items-center justify-center transition-colors shrink-0 ${isSelected
+                        ? "border-zinc-950 bg-zinc-950 text-white"
+                        : "border-zinc-300 bg-white"
+                        }`}
                     >
                       {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
                     </div>
@@ -2112,11 +2109,10 @@ export default function Home() {
             <button
               type="button"
               onClick={() => handleModeChange("video")}
-              className={`h-8 px-3.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all duration-150 cursor-pointer ${
-                chatMode === "video"
-                  ? "bg-white text-zinc-950 shadow-2xs font-semibold ring-1 ring-zinc-200/80"
-                  : "text-zinc-500 hover:text-zinc-900 hover:bg-white/50"
-              }`}
+              className={`h-8 px-3.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all duration-150 cursor-pointer ${chatMode === "video"
+                ? "bg-white text-zinc-950 shadow-2xs font-semibold ring-1 ring-zinc-200/80"
+                : "text-zinc-500 hover:text-zinc-900 hover:bg-white/50"
+                }`}
             >
               <Video className="w-3.5 h-3.5" />
               <span>Video Chat</span>
@@ -2124,11 +2120,10 @@ export default function Home() {
             <button
               type="button"
               onClick={() => handleModeChange("text")}
-              className={`h-8 px-3.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all duration-150 cursor-pointer ${
-                chatMode === "text"
-                  ? "bg-white text-zinc-950 shadow-2xs font-semibold ring-1 ring-zinc-200/80"
-                  : "text-zinc-500 hover:text-zinc-900 hover:bg-white/50"
-              }`}
+              className={`h-8 px-3.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all duration-150 cursor-pointer ${chatMode === "text"
+                ? "bg-white text-zinc-950 shadow-2xs font-semibold ring-1 ring-zinc-200/80"
+                : "text-zinc-500 hover:text-zinc-900 hover:bg-white/50"
+                }`}
             >
               <MessageSquare className="w-3.5 h-3.5" />
               <span>Text Only</span>
@@ -2140,20 +2135,18 @@ export default function Home() {
             {/* Real-time Network Signal Health Indicator */}
             {chatMode === "video" && (
               <div
-                title={`Network Signal: ${
-                  networkQuality === "good"
-                    ? "Strong (Smooth HD)"
-                    : networkQuality === "fair"
+                title={`Network Signal: ${networkQuality === "good"
+                  ? "Strong (Smooth HD)"
+                  : networkQuality === "fair"
                     ? "Fair (Low Bandwidth - optimized)"
                     : "Critical / Weak Signal"
-                }`}
-                className={`hidden md:flex items-center gap-1.5 px-2 py-1 rounded-full border transition-colors ${
-                  networkQuality === "good"
-                    ? "bg-emerald-50/80 border-emerald-200/60 text-emerald-700"
-                    : networkQuality === "fair"
+                  }`}
+                className={`hidden md:flex items-center gap-1.5 px-2 py-1 rounded-full border transition-colors ${networkQuality === "good"
+                  ? "bg-emerald-50/80 border-emerald-200/60 text-emerald-700"
+                  : networkQuality === "fair"
                     ? "bg-amber-50/80 border-amber-200/60 text-amber-700"
                     : "bg-red-50/80 border-red-200/60 text-red-700 animate-pulse"
-                }`}
+                  }`}
               >
                 {networkQuality === "good" ? (
                   <Signal className="w-3.5 h-3.5" />
@@ -2217,11 +2210,10 @@ export default function Home() {
           <button
             type="button"
             onClick={() => handleModeChange("video")}
-            className={`flex-1 h-8 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-              chatMode === "video"
-                ? "bg-white text-zinc-950 shadow-xs ring-1 ring-zinc-200/70"
-                : "text-zinc-500 hover:text-zinc-900"
-            }`}
+            className={`flex-1 h-8 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${chatMode === "video"
+              ? "bg-white text-zinc-950 shadow-xs ring-1 ring-zinc-200/70"
+              : "text-zinc-500 hover:text-zinc-900"
+              }`}
           >
             <Video className="w-3.5 h-3.5" />
             <span>Video Chat</span>
@@ -2229,11 +2221,10 @@ export default function Home() {
           <button
             type="button"
             onClick={() => handleModeChange("text")}
-            className={`flex-1 h-8 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-              chatMode === "text"
-                ? "bg-white text-zinc-950 shadow-xs ring-1 ring-zinc-200/70"
-                : "text-zinc-500 hover:text-zinc-900"
-            }`}
+            className={`flex-1 h-8 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${chatMode === "text"
+              ? "bg-white text-zinc-950 shadow-xs ring-1 ring-zinc-200/70"
+              : "text-zinc-500 hover:text-zinc-900"
+              }`}
           >
             <MessageSquare className="w-3.5 h-3.5" />
             <span>Text Only</span>
@@ -2258,7 +2249,7 @@ export default function Home() {
                   <div className="absolute inset-0 z-0 flex flex-col items-center justify-center overflow-hidden pointer-events-none">
                     {/* Soft ambient background glow */}
                     <div className="absolute inset-0 bg-gradient-to-b from-zinc-900 via-zinc-950 to-black animate-pulse" />
-                    
+
                     {/* Dummy blurred person silhouette */}
                     <div className="relative flex flex-col items-center justify-center filter blur-xl scale-125 opacity-30 animate-pulse">
                       <div className="w-24 h-24 rounded-full bg-gradient-to-tr from-zinc-600 to-zinc-400 mb-2" />
@@ -2297,15 +2288,14 @@ export default function Home() {
                     playsInline
                     onPlaying={() => setIsRemoteVideoPlaying(true)}
                     onLoadedData={() => setIsRemoteVideoPlaying(true)}
-                    className={`absolute inset-0 w-full h-full object-cover z-0 transition-all duration-500 ${
-                      status === "connected" && remoteStream
-                        ? isNsfwBlurred
-                          ? "opacity-100 filter blur-3xl brightness-50"
-                          : isRemoteVideoPlaying
-                            ? "opacity-100 filter-none"
-                            : "opacity-0 filter blur-xl"
-                        : "opacity-0 hidden"
-                    }`}
+                    className={`absolute inset-0 w-full h-full object-cover z-0 transition-all duration-500 ${status === "connected" && remoteStream
+                      ? isNsfwBlurred
+                        ? "opacity-100 filter blur-3xl brightness-50"
+                        : isRemoteVideoPlaying
+                          ? "opacity-100 filter-none"
+                          : "opacity-0 filter blur-xl"
+                      : "opacity-0 hidden"
+                      }`}
                   />
                 ) : (
                   <video
@@ -2313,11 +2303,9 @@ export default function Home() {
                     autoPlay
                     playsInline
                     muted
-                    className={`absolute inset-0 w-full h-full object-cover z-0 ${
-                      facingMode === "user" ? "scale-x-[-1]" : ""
-                    } transition-opacity duration-300 ${
-                      !localStream || hasCameraPermission === false ? "opacity-0" : "opacity-100"
-                    }`}
+                    className={`absolute inset-0 w-full h-full object-cover z-0 ${facingMode === "user" ? "scale-x-[-1]" : ""
+                      } transition-opacity duration-300 ${!localStream || hasCameraPermission === false ? "opacity-0" : "opacity-100"
+                      }`}
                   />
                 )}
               </>
@@ -2326,20 +2314,19 @@ export default function Home() {
             {/* Stage Identity Badge (Top Left) */}
             <div className="absolute top-4 left-4 z-10 flex items-center gap-2 bg-black/60 backdrop-blur-md px-3 py-1 rounded-full border border-white/10 text-white text-xs font-medium pointer-events-none">
               <span
-                className={`w-2 h-2 rounded-full transition-colors duration-300 ${
-                  status === "connected"
-                    ? "bg-emerald-500"
-                    : status === "searching"
+                className={`w-2 h-2 rounded-full transition-colors duration-300 ${status === "connected"
+                  ? "bg-emerald-500"
+                  : status === "searching"
                     ? "bg-amber-400 animate-pulse"
                     : "bg-zinc-600"
-                }`}
+                  }`}
               />
               <span className="text-[11px] font-medium tracking-tight">
                 {isSwappedFeeds
                   ? "You (Full Camera View)"
                   : status === "connected" && strangerGender
-                  ? `Stranger (${strangerGender === "female" ? "Female" : "Male"})`
-                  : `Stranger (${chatMode === "text" ? "Text Mode" : "Video Mode"})`}
+                    ? `Stranger (${strangerGender === "female" ? "Female" : "Male"})`
+                    : `Stranger (${chatMode === "text" ? "Text Mode" : "Video Mode"})`}
               </span>
             </div>
 
@@ -2480,11 +2467,10 @@ export default function Home() {
                           type="button"
                           onClick={() => handleNext()}
                           disabled={isNextDisabled}
-                          className={`h-8 px-3.5 rounded-lg text-white text-xs font-medium transition-all flex items-center gap-1.5 shadow-xs ${
-                            isNextDisabled
-                              ? "bg-zinc-800 text-zinc-500 cursor-not-allowed opacity-60"
-                              : "bg-zinc-800 hover:bg-zinc-700 active:scale-95 cursor-pointer"
-                          }`}
+                          className={`h-8 px-3.5 rounded-lg text-white text-xs font-medium transition-all flex items-center gap-1.5 shadow-xs ${isNextDisabled
+                            ? "bg-zinc-800 text-zinc-500 cursor-not-allowed opacity-60"
+                            : "bg-zinc-800 hover:bg-zinc-700 active:scale-95 cursor-pointer"
+                            }`}
                         >
                           <SkipForward className="w-3 h-3" />
                           <span>Next Now</span>
@@ -2512,11 +2498,11 @@ export default function Home() {
                 style={{
                   ...(pipPos
                     ? {
-                        left: `${pipPos.x}px`,
-                        top: `${pipPos.y}px`,
-                        right: "auto",
-                        bottom: "auto",
-                      }
+                      left: `${pipPos.x}px`,
+                      top: `${pipPos.y}px`,
+                      right: "auto",
+                      bottom: "auto",
+                    }
                     : {}),
                   ...(pipWidth ? { width: `${pipWidth}px`, height: `${Math.round(pipWidth * 1.35)}px` } : {}),
                 }}
@@ -2534,11 +2520,9 @@ export default function Home() {
                     togglePipControls();
                   }
                 }}
-                className={`absolute ${!pipPos ? "bottom-4 right-4" : ""} z-20 ${
-                  !pipWidth ? "w-28 h-38 sm:w-36 sm:h-48" : ""
-                } bg-zinc-950 border border-white/20 rounded-2xl shadow-2xl overflow-hidden backdrop-blur-md transition-shadow select-none group ${
-                  isDragging ? "cursor-grabbing ring-2 ring-zinc-400/40" : "cursor-pointer hover:border-white/40"
-                }`}
+                className={`absolute ${!pipPos ? "bottom-4 right-4" : ""} z-20 ${!pipWidth ? "w-28 h-38 sm:w-36 sm:h-48" : ""
+                  } bg-zinc-950 border border-white/20 rounded-2xl shadow-2xl overflow-hidden backdrop-blur-md transition-shadow select-none group ${isDragging ? "cursor-grabbing ring-2 ring-zinc-400/40" : "cursor-pointer hover:border-white/40"
+                  }`}
               >
                 {/* Corner Pull-to-Resize Handle (Drag corner to resize camera size smoothly) */}
                 <div
@@ -2563,11 +2547,9 @@ export default function Home() {
                     autoPlay
                     playsInline
                     muted
-                    className={`absolute inset-0 w-full h-full object-cover z-0 ${
-                      facingMode === "user" ? "scale-x-[-1]" : ""
-                    } pointer-events-none transition-opacity duration-200 ${
-                      !localStream || hasCameraPermission === false ? "opacity-0" : "opacity-100"
-                    }`}
+                    className={`absolute inset-0 w-full h-full object-cover z-0 ${facingMode === "user" ? "scale-x-[-1]" : ""
+                      } pointer-events-none transition-opacity duration-200 ${!localStream || hasCameraPermission === false ? "opacity-0" : "opacity-100"
+                      }`}
                   />
                 ) : (
                   <video
@@ -2576,9 +2558,8 @@ export default function Home() {
                     playsInline
                     onPlaying={() => setIsRemoteVideoPlaying(true)}
                     onLoadedData={() => setIsRemoteVideoPlaying(true)}
-                    className={`absolute inset-0 w-full h-full object-cover z-0 transition-opacity duration-300 ${
-                      status === "connected" && remoteStream ? "opacity-100" : "opacity-0 hidden"
-                    }`}
+                    className={`absolute inset-0 w-full h-full object-cover z-0 transition-opacity duration-300 ${status === "connected" && remoteStream ? "opacity-100" : "opacity-0 hidden"
+                      }`}
                   />
                 )}
 
@@ -2649,7 +2630,7 @@ export default function Home() {
                         title={isSwappedFeeds ? "Return Stranger to Full Screen" : "Make Your Camera Full Screen (WhatsApp Style)"}
                         className="p-2 text-white/90 hover:text-white active:scale-90 transition-all cursor-pointer group"
                       >
-                        <Scan className="w-10 h-10 sm:w-11 sm:h-11 text-white drop-shadow-[0_2px_10px_rgba(0,0,0,0.85)] group-hover:scale-110 transition-transform stroke-[1.75]" />
+                        <Scan className="w-10 h-10 sm:w-11 sm:h-11 text-white drop-shadow-[0_2px_10px_rgba(0,0,0,0.85)] group-hover:scale-110 transition-transform stroke-[0.5]" />
                       </button>
                     </div>
 
@@ -2662,11 +2643,10 @@ export default function Home() {
                             onClick={() => toggleCameraFacing()}
                             disabled={isFlippingCamera || !localStream}
                             title={`Flip Camera (Currently: ${facingMode === "user" ? "Front" : "Back"})`}
-                            className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
-                              isFlippingCamera
-                                ? "text-indigo-400 animate-spin"
-                                : "text-zinc-200 hover:bg-white/15 hover:text-white"
-                            }`}
+                            className={`p-1.5 rounded-lg transition-colors cursor-pointer ${isFlippingCamera
+                              ? "text-indigo-400 animate-spin"
+                              : "text-zinc-200 hover:bg-white/15 hover:text-white"
+                              }`}
                           >
                             <SwitchCamera className="w-3.5 h-3.5" />
                           </button>
@@ -2674,9 +2654,8 @@ export default function Home() {
                             type="button"
                             onClick={() => toggleMic()}
                             title={isMicMuted ? "Unmute Mic" : "Mute Mic"}
-                            className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
-                              isMicMuted ? "bg-red-500/30 text-red-400" : "text-zinc-200 hover:bg-white/15 hover:text-white"
-                            }`}
+                            className={`p-1.5 rounded-lg transition-colors cursor-pointer ${isMicMuted ? "bg-red-500/30 text-red-400" : "text-zinc-200 hover:bg-white/15 hover:text-white"
+                              }`}
                           >
                             {isMicMuted ? <MicOff className="w-3.5 h-3.5" /> : <Mic className="w-3.5 h-3.5" />}
                           </button>
@@ -2726,11 +2705,10 @@ export default function Home() {
                     onClick={handleStop}
                     disabled={status === "disconnected"}
                     title="Stop / Disconnect"
-                    className={`h-11 px-3.5 sm:px-5 rounded-xl text-sm font-medium transition-all duration-150 flex items-center justify-center gap-1.5 sm:gap-2 cursor-pointer shrink-0 ${
-                      status === "disconnected"
-                        ? "bg-zinc-100 text-zinc-300 border border-zinc-200/50 cursor-not-allowed"
-                        : "bg-zinc-100 hover:bg-red-50 hover:text-red-600 text-zinc-700 border border-zinc-200/70 active:scale-[0.98]"
-                    }`}
+                    className={`h-11 px-3.5 sm:px-5 rounded-xl text-sm font-medium transition-all duration-150 flex items-center justify-center gap-1.5 sm:gap-2 cursor-pointer shrink-0 ${status === "disconnected"
+                      ? "bg-zinc-100 text-zinc-300 border border-zinc-200/50 cursor-not-allowed"
+                      : "bg-zinc-100 hover:bg-red-50 hover:text-red-600 text-zinc-700 border border-zinc-200/70 active:scale-[0.98]"
+                      }`}
                   >
                     <Square className="w-3.5 h-3.5" />
                     <span>Stop</span>
@@ -2754,11 +2732,10 @@ export default function Home() {
                     onClick={handleNext}
                     disabled={status === "searching" || isNextDisabled}
                     title={status === "searching" ? "Finding next stranger..." : "Next Stranger (Esc)"}
-                    className={`flex-1 sm:flex-none h-11 px-4 sm:px-6 rounded-xl text-sm font-medium transition-all duration-150 flex items-center justify-center gap-2 shadow-xs ${
-                      status === "searching" || isNextDisabled
-                        ? "bg-zinc-800 text-zinc-400 opacity-60 cursor-not-allowed"
-                        : "bg-zinc-950 hover:bg-zinc-800 active:scale-[0.98] text-white cursor-pointer"
-                    }`}
+                    className={`flex-1 sm:flex-none h-11 px-4 sm:px-6 rounded-xl text-sm font-medium transition-all duration-150 flex items-center justify-center gap-2 shadow-xs ${status === "searching" || isNextDisabled
+                      ? "bg-zinc-800 text-zinc-400 opacity-60 cursor-not-allowed"
+                      : "bg-zinc-950 hover:bg-zinc-800 active:scale-[0.98] text-white cursor-pointer"
+                      }`}
                   >
                     {status === "searching" ? (
                       <>
@@ -2790,11 +2767,10 @@ export default function Home() {
                 type="button"
                 onClick={() => handleMatchPreferenceChange("any")}
                 title="Match with anyone"
-                className={`flex-1 sm:flex-none h-9 px-2.5 sm:px-3 rounded-lg text-xs font-medium flex items-center justify-center gap-1.5 transition-all duration-150 cursor-pointer ${
-                  matchPreference === "any"
-                    ? "bg-white text-zinc-950 shadow-2xs font-semibold ring-1 ring-zinc-200/80"
-                    : "text-zinc-500 hover:text-zinc-900 hover:bg-white/50"
-                }`}
+                className={`flex-1 sm:flex-none h-9 px-2.5 sm:px-3 rounded-lg text-xs font-medium flex items-center justify-center gap-1.5 transition-all duration-150 cursor-pointer ${matchPreference === "any"
+                  ? "bg-white text-zinc-950 shadow-2xs font-semibold ring-1 ring-zinc-200/80"
+                  : "text-zinc-500 hover:text-zinc-900 hover:bg-white/50"
+                  }`}
               >
                 <div className="w-4 h-4 rounded-full flex items-center justify-center shrink-0">
                   <Image
@@ -2813,11 +2789,10 @@ export default function Home() {
                 type="button"
                 onClick={() => handleMatchPreferenceChange("female")}
                 title="Filter for female strangers"
-                className={`flex-1 sm:flex-none h-9 px-2.5 sm:px-3 rounded-lg text-xs font-medium flex items-center justify-center gap-1.5 transition-all duration-150 cursor-pointer ${
-                  matchPreference === "female"
-                    ? "bg-white text-zinc-950 shadow-2xs font-semibold ring-1 ring-zinc-200/80"
-                    : "text-zinc-500 hover:text-zinc-900 hover:bg-white/50"
-                }`}
+                className={`flex-1 sm:flex-none h-9 px-2.5 sm:px-3 rounded-lg text-xs font-medium flex items-center justify-center gap-1.5 transition-all duration-150 cursor-pointer ${matchPreference === "female"
+                  ? "bg-white text-zinc-950 shadow-2xs font-semibold ring-1 ring-zinc-200/80"
+                  : "text-zinc-500 hover:text-zinc-900 hover:bg-white/50"
+                  }`}
               >
                 <div className="w-4 h-4 rounded-full flex items-center justify-center shrink-0">
                   <Image
@@ -2836,11 +2811,10 @@ export default function Home() {
                 type="button"
                 onClick={() => handleMatchPreferenceChange("male")}
                 title="Filter for male strangers"
-                className={`flex-1 sm:flex-none h-9 px-2.5 sm:px-3 rounded-lg text-xs font-medium flex items-center justify-center gap-1.5 transition-all duration-150 cursor-pointer ${
-                  matchPreference === "male"
-                    ? "bg-white text-zinc-950 shadow-2xs font-semibold ring-1 ring-zinc-200/80"
-                    : "text-zinc-500 hover:text-zinc-900 hover:bg-white/50"
-                }`}
+                className={`flex-1 sm:flex-none h-9 px-2.5 sm:px-3 rounded-lg text-xs font-medium flex items-center justify-center gap-1.5 transition-all duration-150 cursor-pointer ${matchPreference === "male"
+                  ? "bg-white text-zinc-950 shadow-2xs font-semibold ring-1 ring-zinc-200/80"
+                  : "text-zinc-500 hover:text-zinc-900 hover:bg-white/50"
+                  }`}
               >
                 <div className="w-4 h-4 rounded-full flex items-center justify-center shrink-0">
                   <Image
