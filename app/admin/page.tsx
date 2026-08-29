@@ -32,6 +32,12 @@ import {
   Globe,
   MapPin,
   Compass,
+  BarChart3,
+  TrendingUp,
+  Calendar,
+  Award,
+  PhoneCall,
+  Timer,
 } from "lucide-react";
 
 const BACKEND_URL =
@@ -39,7 +45,7 @@ const BACKEND_URL =
   process.env.NEXT_PUBLIC_SOCKET_URL ||
   "https://omeglo-backend.pocoma3486.workers.dev";
 
-type Tab = "overview" | "reports" | "quarantine" | "bans" | "maintenance";
+type Tab = "overview" | "analytics" | "reports" | "quarantine" | "bans" | "maintenance";
 
 type GeoStatItem = {
   country: string;
@@ -105,6 +111,48 @@ type BanItem = {
   expires_at: string | null;
 };
 
+// Analytics Data Types (1D, 7D, 28D, 90D)
+type AnalyticsSummary = {
+  totalVisitors: number;
+  totalCalls: number;
+  totalDurationSeconds: number;
+  avgCallDurationSeconds: number;
+};
+
+type TimelinePoint = {
+  date: string;
+  visitors: number;
+  calls: number;
+  durationMinutes: number;
+};
+
+type CountryStatItem = {
+  country: string;
+  name: string;
+  flag: string;
+  visitors: number;
+  calls: number;
+  totalDurationMinutes: number;
+  avgDurationSeconds: number;
+};
+
+type AnalyticsData = {
+  range: string;
+  summary: AnalyticsSummary;
+  timeline: TimelinePoint[];
+  countryStats: CountryStatItem[];
+};
+
+function formatDuration(totalSeconds: number): string {
+  if (!totalSeconds || totalSeconds <= 0) return "0s";
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  if (minutes > 0) return `${minutes}m ${seconds}s`;
+  return `${seconds}s`;
+}
+
 export default function AdminPage() {
   const [adminKey, setAdminKey] = useState<string>("");
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
@@ -120,6 +168,10 @@ export default function AdminPage() {
   const [reports, setReports] = useState<ReportItem[]>([]);
   const [quarantineList, setQuarantineList] = useState<QuarantineItem[]>([]);
   const [bansList, setBansList] = useState<BanItem[]>([]);
+
+  // Historical Analytics State (1d, 7d, 28d, 90d)
+  const [analyticsRange, setAnalyticsRange] = useState<"1d" | "7d" | "28d" | "90d">("7d");
+  const [analyticsData, setAnalyticsData] = useState<AnalyticsData | null>(null);
 
   // Selection state for Batch Actions
   const [selectedReportIds, setSelectedReportIds] = useState<Set<string>>(new Set());
@@ -192,6 +244,7 @@ export default function AdminPage() {
     reports?: { data: ReportItem[]; ts: number };
     quarantine?: { data: QuarantineItem[]; ts: number };
     bans?: { data: BanItem[]; ts: number };
+    analytics?: { data: AnalyticsData; ts: number; range: string };
     maintenance?: { data: any; ts: number };
   }>({});
 
@@ -202,9 +255,15 @@ export default function AdminPage() {
       const now = Date.now();
       const cached = cacheRef.current[activeTab];
 
-      if (!force && cached && now - cached.ts < 20000) {
+      if (
+        !force &&
+        cached &&
+        now - cached.ts < 20000 &&
+        (activeTab !== "analytics" || (cacheRef.current.analytics && cacheRef.current.analytics.range === analyticsRange))
+      ) {
         // Re-use cached tab data! 0 HTTP requests!
         if (activeTab === "overview") setOverview(cached.data as OverviewData);
+        else if (activeTab === "analytics") setAnalyticsData(cached.data as AnalyticsData);
         else if (activeTab === "reports") setReports(cached.data as ReportItem[]);
         else if (activeTab === "quarantine") setQuarantineList(cached.data as QuarantineItem[]);
         else if (activeTab === "bans") setBansList(cached.data as BanItem[]);
@@ -218,6 +277,12 @@ export default function AdminPage() {
           if (data.success) {
             setOverview(data.overview);
             cacheRef.current.overview = { data: data.overview, ts: Date.now() };
+          }
+        } else if (activeTab === "analytics") {
+          const data = await apiFetch(`/api/admin/analytics?range=${analyticsRange}`);
+          if (data.success) {
+            setAnalyticsData(data);
+            cacheRef.current.analytics = { data, ts: Date.now(), range: analyticsRange };
           }
         } else if (activeTab === "reports") {
           const data = await apiFetch("/api/admin/reports");
@@ -244,14 +309,14 @@ export default function AdminPage() {
         setIsLoading(false);
       }
     },
-    [activeTab, apiFetch, isAuthenticated]
+    [activeTab, analyticsRange, apiFetch, isAuthenticated]
   );
 
   useEffect(() => {
     loadData(false);
     setSelectedReportIds(new Set());
     setSelectedBanIds(new Set());
-  }, [loadData, activeTab]);
+  }, [loadData, activeTab, analyticsRange]);
 
   // Handle Login PIN submission
   const handleLogin = async (e: React.FormEvent) => {
@@ -318,7 +383,7 @@ export default function AdminPage() {
             prev.map((r) => (r.id === params.reportId ? { ...r, status: "resolved" } : r))
           );
         }
-        loadData();
+        loadData(true);
         setSelectedReport(null);
       }
     } catch (err: any) {
@@ -337,7 +402,7 @@ export default function AdminPage() {
         setReports((prev) =>
           prev.map((r) => (r.id === reportId ? { ...r, status: "dismissed" } : r))
         );
-        loadData();
+        loadData(true);
         setSelectedReport(null);
       }
     } catch (err: any) {
@@ -375,7 +440,7 @@ export default function AdminPage() {
       if (data.success) {
         showToast("Ban deleted and user unbanned.");
         setBansList((prev) => prev.filter((b) => b.id !== banId));
-        loadData();
+        loadData(true);
       }
     } catch (err: any) {
       showToast(err.message, "error");
@@ -391,7 +456,7 @@ export default function AdminPage() {
       if (data.success) {
         showToast("Quarantine record deleted.");
         setQuarantineList((prev) => prev.filter((q) => q.id !== id));
-        loadData();
+        loadData(true);
       }
     } catch (err: any) {
       showToast(err.message, "error");
@@ -460,7 +525,7 @@ export default function AdminPage() {
       });
       if (data.success) {
         showToast(data.message);
-        loadData();
+        loadData(true);
       }
     } catch (err: any) {
       showToast(err.message, "error");
@@ -486,7 +551,7 @@ export default function AdminPage() {
         showToast(data.message || "User hard banned successfully.");
         setShowBanModal(false);
         setBanIdentifier("");
-        loadData();
+        loadData(true);
       }
     } catch (err: any) {
       showToast(err.message, "error");
@@ -494,7 +559,7 @@ export default function AdminPage() {
   };
 
   const handleTriggerCleanup = async (days: number = 90) => {
-    if (!confirm(`Run cleanup for records older than ${days} days?`)) return;
+    if (!confirm(`Run cleanup for reports, reputations, and traffic stats older than ${days} days?`)) return;
     setIsLoading(true);
     try {
       const data = await apiFetch("/api/admin/cleanup", {
@@ -503,7 +568,7 @@ export default function AdminPage() {
       });
       if (data.success) {
         showToast(data.message);
-        loadData();
+        loadData(true);
       }
     } catch (err: any) {
       showToast(err.message, "error");
@@ -565,7 +630,7 @@ export default function AdminPage() {
             Omeglo Moderation Portal
           </h1>
           <p className="text-xs text-zinc-400 mb-6 leading-relaxed">
-            Enter master passcode to manage reports, toxic shadow pool, and bans.
+            Enter master passcode to manage reports, traffic analytics, and bans.
           </p>
 
           <form onSubmit={handleLogin} className="w-full space-y-3">
@@ -727,6 +792,18 @@ export default function AdminPage() {
           </button>
 
           <button
+            onClick={() => setActiveTab("analytics")}
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer flex items-center gap-2 ${
+              activeTab === "analytics"
+                ? "bg-white text-zinc-950 shadow-xs"
+                : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900"
+            }`}
+          >
+            <BarChart3 className="w-3.5 h-3.5 text-cyan-400" />
+            <span>Traffic Analytics</span>
+          </button>
+
+          <button
             onClick={() => setActiveTab("reports")}
             className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer flex items-center gap-2 ${
               activeTab === "reports"
@@ -876,19 +953,19 @@ export default function AdminPage() {
                     <span>Live Global Traffic & Country Heatmap</span>
                   </h2>
                   <p className="text-xs text-zinc-400 mt-0.5">
-                    Real-time geo-distribution powered by Cloudflare Native Edge Network
+                    Real-time active connections powered by Cloudflare Native Edge
                   </p>
                 </div>
 
                 <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-zinc-950 border border-zinc-800 text-[11px] text-zinc-300 font-mono w-fit">
                   <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-                  <span>{overview?.liveSockets ?? 0} Global Connections</span>
+                  <span>{overview?.liveSockets ?? 0} Live Connections</span>
                 </div>
               </div>
 
               {/* Country Distribution Grid & Progress Bars */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 pt-2">
-                {(!overview?.geoStats || overview.geoStats.length === 0) ? (
+                {!overview?.geoStats || overview.geoStats.length === 0 ? (
                   <div className="col-span-full p-8 text-center text-zinc-500 text-xs bg-zinc-950/60 rounded-2xl border border-zinc-800/60">
                     Waiting for active user connections to populate global heatmap...
                   </div>
@@ -929,6 +1006,190 @@ export default function AdminPage() {
                     </div>
                   ))
                 )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* =========================================================================
+            TAB 1.5: TRAFFIC & DURATION ANALYTICS (1D, 7D, 28D, 90D)
+            ========================================================================= */}
+        {activeTab === "analytics" && (
+          <div className="space-y-6 animate-in fade-in duration-200">
+            {/* Range Selector Header */}
+            <div className="bg-zinc-900/60 border border-zinc-800/80 rounded-3xl p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div>
+                <h2 className="text-base font-bold text-white flex items-center gap-2">
+                  <BarChart3 className="w-5 h-5 text-cyan-400" />
+                  <span>Traffic & Engagement Duration Analytics</span>
+                </h2>
+                <p className="text-xs text-zinc-400 mt-0.5">
+                  Historical aggregated visitor volume, total completed video calls, and call durations.
+                </p>
+              </div>
+
+              {/* Range Selector Pills */}
+              <div className="flex items-center bg-zinc-950 border border-zinc-800 rounded-2xl p-1 text-xs">
+                {[
+                  { id: "1d", label: "24 Hours" },
+                  { id: "7d", label: "7 Days" },
+                  { id: "28d", label: "28 Days" },
+                  { id: "90d", label: "3 Months (90D)" },
+                ].map((r) => (
+                  <button
+                    key={r.id}
+                    onClick={() => setAnalyticsRange(r.id as any)}
+                    className={`px-3 py-1.5 rounded-xl font-semibold transition-all cursor-pointer text-[11px] ${
+                      analyticsRange === r.id
+                        ? "bg-cyan-500 text-zinc-950 font-bold shadow-xs"
+                        : "text-zinc-400 hover:text-white"
+                    }`}
+                  >
+                    {r.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* 4 Summary Stat Cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="bg-zinc-900/60 border border-zinc-800/80 rounded-3xl p-5 shadow-xs">
+                <div className="flex items-center justify-between text-zinc-400 mb-2">
+                  <span className="text-xs font-medium uppercase tracking-wider">Total Visitors</span>
+                  <Users className="w-4 h-4 text-cyan-400" />
+                </div>
+                <div className="text-2xl sm:text-3xl font-black text-white font-mono">
+                  {analyticsData?.summary?.totalVisitors ?? 0}
+                </div>
+                <div className="text-[11px] text-zinc-500 mt-1">In selected {analyticsRange} period</div>
+              </div>
+
+              <div className="bg-zinc-900/60 border border-zinc-800/80 rounded-3xl p-5 shadow-xs">
+                <div className="flex items-center justify-between text-zinc-400 mb-2">
+                  <span className="text-xs font-medium uppercase tracking-wider">Completed Calls</span>
+                  <PhoneCall className="w-4 h-4 text-emerald-400" />
+                </div>
+                <div className="text-2xl sm:text-3xl font-black text-emerald-300 font-mono">
+                  {analyticsData?.summary?.totalCalls ?? 0}
+                </div>
+                <div className="text-[11px] text-zinc-500 mt-1">Video chats successfully matched</div>
+              </div>
+
+              <div className="bg-zinc-900/60 border border-zinc-800/80 rounded-3xl p-5 shadow-xs">
+                <div className="flex items-center justify-between text-zinc-400 mb-2">
+                  <span className="text-xs font-medium uppercase tracking-wider">Total Time Spent</span>
+                  <Timer className="w-4 h-4 text-purple-400" />
+                </div>
+                <div className="text-2xl sm:text-3xl font-black text-purple-300 font-mono">
+                  {formatDuration(analyticsData?.summary?.totalDurationSeconds ?? 0)}
+                </div>
+                <div className="text-[11px] text-zinc-500 mt-1">Accumulated call talk time</div>
+              </div>
+
+              <div className="bg-zinc-900/60 border border-zinc-800/80 rounded-3xl p-5 shadow-xs">
+                <div className="flex items-center justify-between text-zinc-400 mb-2">
+                  <span className="text-xs font-medium uppercase tracking-wider">Avg Call Duration</span>
+                  <Sparkles className="w-4 h-4 text-amber-400" />
+                </div>
+                <div className="text-2xl sm:text-3xl font-black text-amber-300 font-mono">
+                  {formatDuration(analyticsData?.summary?.avgCallDurationSeconds ?? 0)}
+                </div>
+                <div className="text-[11px] text-zinc-500 mt-1">Average conversation length</div>
+              </div>
+            </div>
+
+            {/* Daily Trend Time-Series Visualizer */}
+            <div className="bg-zinc-900/60 border border-zinc-800/80 rounded-3xl p-6 space-y-4">
+              <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                <TrendingUp className="w-4 h-4 text-emerald-400" />
+                <span>Daily Traffic & Call Activity Trend</span>
+              </h3>
+
+              {!analyticsData?.timeline || analyticsData.timeline.length === 0 ? (
+                <div className="p-12 text-center text-zinc-500 text-xs bg-zinc-950/60 rounded-2xl border border-zinc-800/60">
+                  No historical traffic data recorded in this timeframe yet. Data will accumulate as users chat.
+                </div>
+              ) : (
+                <div className="space-y-3 pt-2">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 gap-2">
+                    {analyticsData.timeline.map((point) => (
+                      <div
+                        key={point.date}
+                        className="bg-zinc-950 border border-zinc-800/80 rounded-2xl p-3.5 text-center space-y-1 hover:border-zinc-700 transition-colors"
+                      >
+                        <span className="text-[11px] font-mono text-zinc-400 block">{point.date}</span>
+                        <div className="text-base font-extrabold text-white font-mono">{point.calls} calls</div>
+                        <span className="text-[10px] text-purple-400 font-mono block">
+                          {point.durationMinutes} mins
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Country Engagement & Duration Leaderboard */}
+            <div className="bg-zinc-900/60 border border-zinc-800/80 rounded-3xl p-6 space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                    <Award className="w-4 h-4 text-amber-400" />
+                    <span>Top Countries by Engagement & Duration</span>
+                  </h3>
+                  <p className="text-xs text-zinc-400 mt-0.5">
+                    Which countries talk the longest and produce the most call traffic
+                  </p>
+                </div>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-zinc-950/80 border-b border-zinc-800/80 text-zinc-400 font-medium uppercase tracking-wider text-[10px]">
+                    <tr>
+                      <th className="p-3.5 w-12 text-center">Rank</th>
+                      <th className="p-3.5">Country</th>
+                      <th className="p-3.5">Total Visitors</th>
+                      <th className="p-3.5">Completed Calls</th>
+                      <th className="p-3.5">Total Duration</th>
+                      <th className="p-3.5 text-right">Avg Call Duration</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-zinc-800/50 text-zinc-300">
+                    {!analyticsData?.countryStats || analyticsData.countryStats.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="p-8 text-center text-zinc-500">
+                          No country duration stats recorded yet.
+                        </td>
+                      </tr>
+                    ) : (
+                      analyticsData.countryStats.map((item, idx) => (
+                        <tr key={item.country} className="hover:bg-zinc-800/30 transition-colors">
+                          <td className="p-3.5 text-center font-bold font-mono">
+                            {idx === 0 ? "🥇" : idx === 1 ? "🥈" : idx === 2 ? "🥉" : `#${idx + 1}`}
+                          </td>
+                          <td className="p-3.5">
+                            <div className="flex items-center gap-2">
+                              <span className="text-lg select-none">{item.flag}</span>
+                              <span className="font-bold text-white">{item.name}</span>
+                              <span className="text-[10px] text-zinc-500 font-mono">({item.country})</span>
+                            </div>
+                          </td>
+                          <td className="p-3.5 font-mono text-zinc-300">{item.visitors}</td>
+                          <td className="p-3.5 font-mono font-bold text-emerald-300">{item.calls}</td>
+                          <td className="p-3.5 font-mono text-purple-300 font-semibold">
+                            {item.totalDurationMinutes} mins
+                          </td>
+                          <td className="p-3.5 text-right">
+                            <span className="px-2.5 py-1 rounded-full bg-amber-950/80 text-amber-300 border border-amber-800/50 font-mono text-[11px] font-bold">
+                              {formatDuration(item.avgDurationSeconds)}
+                            </span>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
               </div>
             </div>
           </div>
@@ -1328,7 +1589,7 @@ export default function AdminPage() {
                 <div>
                   <h3 className="text-sm font-semibold text-white">Manual 90-Day Auto Cleanup</h3>
                   <p className="text-xs text-zinc-400 mt-0.5">
-                    Deletes reports older than 90 days and clears non-active reputation records.
+                    Deletes reports, traffic analytics, and inactive reputation records older than 90 days.
                   </p>
                 </div>
                 <button
@@ -1345,7 +1606,7 @@ export default function AdminPage() {
                 <div>
                   <h3 className="text-sm font-semibold text-white">Aggressive 30-Day Purge</h3>
                   <p className="text-xs text-zinc-400 mt-0.5">
-                    Free up D1 storage by purging records older than 30 days.
+                    Free up D1 storage by purging reports and traffic stats older than 30 days.
                   </p>
                 </div>
                 <button

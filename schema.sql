@@ -56,3 +56,17 @@ CREATE TABLE IF NOT EXISTS banned_users (
 );
 
 CREATE INDEX IF NOT EXISTS idx_banned_identifier ON banned_users(identifier);
+
+-- 4. Daily Traffic & Engagement Duration Analytics Table
+CREATE TABLE IF NOT EXISTS daily_traffic_stats (
+  date TEXT NOT NULL,                 -- 'YYYY-MM-DD'
+  country TEXT NOT NULL,              -- 'LK', 'US', 'GB', etc.
+  country_name TEXT,                  -- 'Sri Lanka'
+  total_visitors INTEGER DEFAULT 0,
+  total_calls INTEGER DEFAULT 0,
+  total_duration_seconds INTEGER DEFAULT 0,
+  PRIMARY KEY (date, country)
+);
+
+CREATE INDEX IF NOT EXISTS idx_traffic_date ON daily_traffic_stats(date DESC);
+CREATE INDEX IF NOT EXISTS idx_traffic_country ON daily_traffic_stats(country);

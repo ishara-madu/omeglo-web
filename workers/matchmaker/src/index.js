@@ -25,6 +25,68 @@ export class Matchmaker {
     // Sockets & Geo Map
     this.sockets = new Map();
     this.socketGeo = new Map();
+
+    // In-memory Traffic & Duration Analytics Buffer (flushed periodically to D1)
+    this.pendingAnalytics = new Map();
+    this.lastFlushTs = Date.now();
+  }
+
+  recordVisitor(country) {
+    const c = (country || "LK").toUpperCase();
+    if (!this.pendingAnalytics.has(c)) {
+      this.pendingAnalytics.set(c, { visitors: 0, calls: 0, duration: 0 });
+    }
+    this.pendingAnalytics.get(c).visitors += 1;
+  }
+
+  recordCallDuration(country, durationSecs = 0) {
+    const c = (country || "LK").toUpperCase();
+    if (!this.pendingAnalytics.has(c)) {
+      this.pendingAnalytics.set(c, { visitors: 0, calls: 0, duration: 0 });
+    }
+    const entry = this.pendingAnalytics.get(c);
+    entry.calls += 1;
+    entry.duration += Math.max(1, durationSecs);
+
+    // If 3+ minutes passed or 20+ records queued, flush asynchronously
+    if (Date.now() - this.lastFlushTs > 180000 || this.pendingAnalytics.size >= 20) {
+      this.flushAnalytics();
+    }
+  }
+
+  async flushAnalytics() {
+    if (!this.env.DB || this.pendingAnalytics.size === 0) return;
+    this.lastFlushTs = Date.now();
+    const entries = Array.from(this.pendingAnalytics.entries());
+    this.pendingAnalytics.clear();
+
+    const today = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
+    const countryNames = {
+      LK: "Sri Lanka", US: "United States", IN: "India", GB: "United Kingdom",
+      CA: "Canada", AU: "Australia", DE: "Germany", FR: "France", AE: "UAE",
+      SA: "Saudi Arabia", SG: "Singapore", MY: "Malaysia", IT: "Italy", ES: "Spain",
+      NL: "Netherlands", BR: "Brazil", JP: "Japan", KR: "South Korea", RU: "Russia",
+      PK: "Pakistan", BD: "Bangladesh", QA: "Qatar", KW: "Kuwait", OM: "Oman",
+      ID: "Indonesia", PH: "Philippines", TH: "Thailand", VN: "Vietnam", NZ: "New Zealand"
+    };
+
+    for (const [country, stats] of entries) {
+      try {
+        const name = countryNames[country] || country;
+        await this.env.DB.prepare(
+          `INSERT INTO daily_traffic_stats (date, country, country_name, total_visitors, total_calls, total_duration_seconds)
+           VALUES (?, ?, ?, ?, ?, ?)
+           ON CONFLICT(date, country) DO UPDATE SET
+             total_visitors = total_visitors + excluded.total_visitors,
+             total_calls = total_calls + excluded.total_calls,
+             total_duration_seconds = total_duration_seconds + excluded.total_duration_seconds`
+        )
+          .bind(today, country, name, stats.visitors, stats.calls, stats.duration)
+          .run();
+      } catch (err) {
+        console.error("Flush analytics error for", country, err);
+      }
+    }
   }
 
   async fetch(request) {
@@ -177,6 +239,104 @@ export class Matchmaker {
               quarantinedTextQueue: this.quarantinedTextQueue.length,
               geoStats,
             },
+          }),
+          { headers: corsHeaders }
+        );
+      }
+
+      // 1.1 Admin Historical Traffic & Duration Analytics (1d, 7d, 28d, 90d)
+      if (url.pathname === "/api/admin/analytics") {
+        const range = url.searchParams.get("range") || "7d";
+        const daysMap = { "1d": 1, "7d": 7, "28d": 28, "90d": 90 };
+        const days = daysMap[range] || 7;
+
+        // Flush pending buffer before reading
+        await this.flushAnalytics();
+
+        let timeline = [];
+        let countryStats = [];
+        let summary = {
+          totalVisitors: 0,
+          totalCalls: 0,
+          totalDurationSeconds: 0,
+          avgCallDurationSeconds: 0,
+        };
+
+        if (this.env.DB) {
+          try {
+            const res = await this.env.DB.prepare(
+              `SELECT date, country, country_name, total_visitors, total_calls, total_duration_seconds
+               FROM daily_traffic_stats
+               WHERE date >= date('now', '-${days} days')
+               ORDER BY date ASC`
+            ).all();
+
+            const rows = res.results || [];
+            const dateMap = {};
+            const countryAgg = {};
+
+            for (const r of rows) {
+              summary.totalVisitors += r.total_visitors || 0;
+              summary.totalCalls += r.total_calls || 0;
+              summary.totalDurationSeconds += r.total_duration_seconds || 0;
+
+              // Aggregate by date for timeline chart
+              if (!dateMap[r.date]) {
+                dateMap[r.date] = { date: r.date, visitors: 0, calls: 0, durationMinutes: 0 };
+              }
+              dateMap[r.date].visitors += r.total_visitors || 0;
+              dateMap[r.date].calls += r.total_calls || 0;
+              dateMap[r.date].durationMinutes += Math.round((r.total_duration_seconds || 0) / 60);
+
+              // Aggregate by country
+              const c = r.country;
+              if (!countryAgg[c]) {
+                countryAgg[c] = {
+                  country: c,
+                  name: r.country_name || c,
+                  visitors: 0,
+                  calls: 0,
+                  durationSeconds: 0,
+                };
+              }
+              countryAgg[c].visitors += r.total_visitors || 0;
+              countryAgg[c].calls += r.total_calls || 0;
+              countryAgg[c].durationSeconds += r.total_duration_seconds || 0;
+            }
+
+            timeline = Object.values(dateMap);
+            if (summary.totalCalls > 0) {
+              summary.avgCallDurationSeconds = Math.round(summary.totalDurationSeconds / summary.totalCalls);
+            }
+
+            const getFlag = (code) =>
+              code && code.length === 2
+                ? String.fromCodePoint(...[...code.toUpperCase()].map((ch) => 127397 + ch.charCodeAt(0)))
+                : "🌐";
+
+            countryStats = Object.values(countryAgg)
+              .map((c) => ({
+                country: c.country,
+                name: c.name,
+                flag: getFlag(c.country),
+                visitors: c.visitors,
+                calls: c.calls,
+                totalDurationMinutes: Math.round(c.durationSeconds / 60),
+                avgDurationSeconds: c.calls > 0 ? Math.round(c.durationSeconds / c.calls) : 0,
+              }))
+              .sort((a, b) => b.calls - a.calls || b.totalDurationMinutes - a.totalDurationMinutes);
+          } catch (err) {
+            console.error("Fetch analytics error:", err);
+          }
+        }
+
+        return new Response(
+          JSON.stringify({
+            success: true,
+            range,
+            summary,
+            timeline,
+            countryStats,
           }),
           { headers: corsHeaders }
         );
@@ -527,13 +687,14 @@ export class Matchmaker {
         }
       }
 
-      // 8. Action: Manual 90-Day Cleanup Trigger
+      // 8. Action: Manual 90-Day / 30-Day Cleanup Trigger
       if (url.pathname === "/api/admin/cleanup" && request.method === "POST") {
         try {
           const body = await request.json();
           const days = body?.days || 90;
           let deletedReports = 0;
           let deletedReputations = 0;
+          let deletedTraffic = 0;
 
           if (this.env.DB) {
             const delRep = await this.env.DB.prepare(
@@ -547,12 +708,18 @@ export class Matchmaker {
                  AND (quarantined_until IS NULL OR quarantined_until < datetime('now'))`
             ).run();
             deletedReputations = delUser.meta?.changes || 0;
+
+            // Also purge historical daily traffic analytics older than N days (90 Days / 30 Days)
+            const delTraffic = await this.env.DB.prepare(
+              `DELETE FROM daily_traffic_stats WHERE date < date('now', '-${days} days')`
+            ).run();
+            deletedTraffic = delTraffic.meta?.changes || 0;
           }
 
           return new Response(
             JSON.stringify({
               success: true,
-              message: `Cleaned up ${deletedReports} reports and ${deletedReputations} inactive reputation records older than ${days} days.`,
+              message: `Cleaned up ${deletedReports} reports, ${deletedReputations} inactive reputation records, and ${deletedTraffic} traffic stats older than ${days} days.`,
             }),
             { headers: corsHeaders }
           );
@@ -600,6 +767,8 @@ export class Matchmaker {
       continent: geo.continent || "AS",
       connectedAt: Date.now(),
     });
+
+    this.recordVisitor(geo.country || "LK");
 
     console.log(`[+] User connected: ${socketId} (IP: ${clientIp}, Country: ${geo.country || "LK"})`);
     this.broadcastOnlineCount();
@@ -687,9 +856,21 @@ export class Matchmaker {
   cleanupActivePair(socketId) {
     if (this.activePairs.has(socketId)) {
       const pair = this.activePairs.get(socketId);
+      const durationSecs = pair.matchedAt ? Math.round((Date.now() - pair.matchedAt) / 1000) : 0;
+      if (durationSecs > 0) {
+        this.recordCallDuration(pair.country, durationSecs);
+      }
       this.activePairs.delete(socketId);
-      this.activePairs.delete(pair.partnerSocketId);
-      this.emit(pair.partnerSocketId, "partner-disconnected", {});
+
+      if (pair.partnerSocketId && this.activePairs.has(pair.partnerSocketId)) {
+        const partnerPair = this.activePairs.get(pair.partnerSocketId);
+        const partnerDuration = partnerPair.matchedAt ? Math.round((Date.now() - partnerPair.matchedAt) / 1000) : 0;
+        if (partnerDuration > 0) {
+          this.recordCallDuration(partnerPair.country, partnerDuration);
+        }
+        this.activePairs.delete(pair.partnerSocketId);
+        this.emit(pair.partnerSocketId, "partner-disconnected", {});
+      }
     }
   }
 
@@ -770,17 +951,25 @@ export class Matchmaker {
     const match = this.findCompatibleMatch(currentUser, targetQueue);
 
     if (match) {
+      const now = Date.now();
+      const userGeo = this.socketGeo.get(socketId) || {};
+      const matchGeo = this.socketGeo.get(match.socketId) || {};
+
       this.activePairs.set(socketId, {
         partnerSocketId: match.socketId,
         partnerPeerId: match.peerId,
         mode: chatMode,
         isQuarantined,
+        matchedAt: now,
+        country: userGeo.country || "LK",
       });
       this.activePairs.set(match.socketId, {
         partnerSocketId: socketId,
         partnerPeerId: peerId,
         mode: chatMode,
         isQuarantined,
+        matchedAt: now,
+        country: matchGeo.country || "LK",
       });
 
       this.emit(socketId, "match-found", {
