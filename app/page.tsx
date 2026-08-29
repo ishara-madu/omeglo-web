@@ -2021,7 +2021,7 @@ export default function Home() {
 
       {/* Top Header */}
       <header className="w-full bg-white/95 backdrop-blur-md border-b border-zinc-200/70 sticky top-0 z-30">
-        <div className="max-w-7xl mx-auto px-3 sm:px-6 h-14 sm:h-15 flex items-center justify-between gap-1.5 sm:gap-4">
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 h-14 sm:h-15 flex items-center justify-between gap-2">
           {/* Brand Logo & Multicolor Wordmark */}
           <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
             {/* Minimalist Logo Icon */}
@@ -2047,33 +2047,31 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Central Segmented Chat Mode Switcher (Video vs Text) */}
-          <div className="flex items-center bg-zinc-100/90 p-0.5 sm:p-1 rounded-xl border border-zinc-200/60 shadow-2xs shrink-0">
+          {/* Desktop Central Segmented Chat Mode Switcher (Video vs Text) (>= md) */}
+          <div className="hidden md:flex items-center bg-zinc-100/90 p-1 rounded-xl border border-zinc-200/60 shadow-2xs">
             <button
               type="button"
               onClick={() => handleModeChange("video")}
-              className={`h-7 sm:h-8 px-2 sm:px-3 rounded-lg text-[11px] sm:text-xs font-medium flex items-center gap-1 sm:gap-1.5 transition-all duration-150 cursor-pointer ${
+              className={`h-8 px-3.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all duration-150 cursor-pointer ${
                 chatMode === "video"
                   ? "bg-white text-zinc-950 shadow-2xs font-semibold ring-1 ring-zinc-200/80"
                   : "text-zinc-500 hover:text-zinc-900 hover:bg-white/50"
               }`}
             >
-              <Video className="w-3.5 h-3.5 shrink-0" />
-              <span>Video</span>
-              <span className="hidden sm:inline">Chat</span>
+              <Video className="w-3.5 h-3.5" />
+              <span>Video Chat</span>
             </button>
             <button
               type="button"
               onClick={() => handleModeChange("text")}
-              className={`h-7 sm:h-8 px-2 sm:px-3 rounded-lg text-[11px] sm:text-xs font-medium flex items-center gap-1 sm:gap-1.5 transition-all duration-150 cursor-pointer ${
+              className={`h-8 px-3.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all duration-150 cursor-pointer ${
                 chatMode === "text"
                   ? "bg-white text-zinc-950 shadow-2xs font-semibold ring-1 ring-zinc-200/80"
                   : "text-zinc-500 hover:text-zinc-900 hover:bg-white/50"
               }`}
             >
-              <MessageSquare className="w-3.5 h-3.5 shrink-0" />
-              <span>Text</span>
-              <span className="hidden sm:inline">Only</span>
+              <MessageSquare className="w-3.5 h-3.5" />
+              <span>Text Only</span>
             </button>
           </div>
 
@@ -2118,7 +2116,7 @@ export default function Home() {
                   setShowGenderModal(true);
                 }}
                 title="Click to change your gender"
-                className="flex items-center gap-1 sm:gap-2 px-2 sm:px-2.5 py-1 rounded-full bg-zinc-100/90 hover:bg-zinc-200/80 text-zinc-800 border border-zinc-200/60 transition-colors cursor-pointer"
+                className="flex items-center gap-1.5 sm:gap-2 px-2.5 py-1 rounded-full bg-zinc-100/90 hover:bg-zinc-200/80 text-zinc-800 border border-zinc-200/60 transition-colors cursor-pointer"
               >
                 <div className="w-3.5 h-3.5 sm:w-4 sm:h-4 rounded-full overflow-hidden flex items-center justify-center shrink-0">
                   <Image
@@ -2129,19 +2127,19 @@ export default function Home() {
                     className="w-full h-full object-contain"
                   />
                 </div>
-                <span className="capitalize font-medium text-[10px] sm:text-[11px]">{userGender}</span>
+                <span className="capitalize font-medium text-[11px]">{userGender}</span>
                 <Edit2 className="w-2.5 h-2.5 text-zinc-400 ml-0.5 hidden sm:inline" />
               </button>
             )}
 
             {/* Real-time Online Counter from Socket Server */}
-            <div className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-2.5 py-1 rounded-full bg-zinc-100/90 text-zinc-700 border border-zinc-200/50">
+            <div className="flex items-center gap-1.5 sm:gap-2 px-2.5 py-1 rounded-full bg-zinc-100/90 text-zinc-700 border border-zinc-200/50">
               <span className="relative flex h-1.5 w-1.5 shrink-0">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                 <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
               </span>
               <Users className="w-3 h-3 text-zinc-500 shrink-0" />
-              <span className="font-bold text-[11px] sm:text-xs">{onlineCount}</span>
+              <span className="font-bold text-xs">{onlineCount}</span>
               <span className="text-zinc-400 hidden sm:inline text-[11px]">online</span>
             </div>
 
@@ -2152,6 +2150,36 @@ export default function Home() {
           </div>
         </div>
       </header>
+
+      {/* Dedicated Mobile Chat Mode Switcher Sub-Bar (< md) - 100% Fits Any Small Screen */}
+      <div className="md:hidden w-full bg-white/90 border-b border-zinc-200/60 px-3 py-1.5 flex items-center justify-center sticky top-14 z-25 backdrop-blur-sm">
+        <div className="w-full max-w-xs flex items-center bg-zinc-100 p-0.5 rounded-xl border border-zinc-200/80 shadow-2xs">
+          <button
+            type="button"
+            onClick={() => handleModeChange("video")}
+            className={`flex-1 h-8 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+              chatMode === "video"
+                ? "bg-white text-zinc-950 shadow-xs ring-1 ring-zinc-200/70"
+                : "text-zinc-500 hover:text-zinc-900"
+            }`}
+          >
+            <Video className="w-3.5 h-3.5" />
+            <span>Video Chat</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => handleModeChange("text")}
+            className={`flex-1 h-8 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+              chatMode === "text"
+                ? "bg-white text-zinc-950 shadow-xs ring-1 ring-zinc-200/70"
+                : "text-zinc-500 hover:text-zinc-900"
+            }`}
+          >
+            <MessageSquare className="w-3.5 h-3.5" />
+            <span>Text Only</span>
+          </button>
+        </div>
+      </div>
 
       {/* Main Content Area */}
       <main className="flex-1 max-w-7xl w-full mx-auto p-3 sm:p-5 lg:p-6 flex flex-col lg:grid lg:grid-cols-12 gap-4 lg:gap-6">
