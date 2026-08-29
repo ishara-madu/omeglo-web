@@ -397,6 +397,7 @@ export default function Home() {
   const myPeerIdRef = useRef<string | null>(null);
   const currentPartnerPeerIdRef = useRef<string | null>(null);
   const targetReportPeerIdRef = useRef<string | null>(null);
+  const hasAutoReportedRef = useRef<boolean>(false);
   const socketRef = useRef<any>(null);
   const activeCallRef = useRef<MediaConnection | null>(null);
   const dataConnRef = useRef<DataConnection | null>(null);
@@ -1004,6 +1005,7 @@ export default function Home() {
       remoteVideoRef.current.srcObject = null;
     }
     setStrangerGender(null);
+    hasAutoReportedRef.current = false;
   }, []);
 
   // Initialize Socket.io and PeerJS
@@ -1498,17 +1500,22 @@ export default function Home() {
     initToxicityDetector().catch(() => {});
 
     const interval = setInterval(async () => {
+      if (hasAutoReportedRef.current || status !== "connected") return;
+
       // 1. Scan remote stranger video feed
       if (remoteVideoRef.current && status === "connected") {
         const remoteNsfw = await checkVideoFrame(remoteVideoRef.current);
-        if (remoteNsfw.isNsfw) {
+        if (remoteNsfw.isNsfw && !hasAutoReportedRef.current) {
+          hasAutoReportedRef.current = true; // ATOMIC SINGLE REPORT LOCK
+          clearInterval(interval); // STOP SCANNER IMMEDIATELY
+
           setIsNsfwBlurred(true);
           showModerationAlert(
             `⚠️ AI Auto-Shield: Inappropriate content detected. Stranger reported & quarantined.`,
             "error"
           );
 
-          // Auto-report stranger immediately to D1
+          // Auto-report stranger EXACTLY ONCE to D1
           socketRef.current?.emit("report-partner", {
             targetPeerId: currentPartnerPeerIdRef.current,
             reason: "nudity",
@@ -1527,13 +1534,16 @@ export default function Home() {
       // 2. Scan local video feed (Strict Zero-Tolerance Auto-Quarantine)
       if (localVideoRef.current && status === "connected") {
         const localNsfw = await checkVideoFrame(localVideoRef.current);
-        if (localNsfw.isNsfw) {
+        if (localNsfw.isNsfw && !hasAutoReportedRef.current) {
+          hasAutoReportedRef.current = true; // ATOMIC SINGLE REPORT LOCK
+          clearInterval(interval); // STOP SCANNER IMMEDIATELY
+
           showModerationAlert(
             "⚠️ Camera Violation: Inappropriate content detected on camera. You have been quarantined.",
             "error"
           );
 
-          // Auto-report local violator to D1 for immediate quarantine
+          // Auto-report local violator EXACTLY ONCE to D1 for immediate quarantine
           socketRef.current?.emit("report-self", {
             reason: "nudity",
             details: `AI Auto-Detected Nudity on Camera (${localNsfw.topCategory}: ${(localNsfw.probability * 100).toFixed(0)}%)`,

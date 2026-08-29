@@ -1,9 +1,7 @@
 /**
- * NSFWJS (TensorFlow.js) & Hybrid Computer Vision Nudity Shield for Omeglo
- * Real-time active video scanner for nudity, flashing, pornography, and inappropriate exposure.
- * Uses a Two-Tier Hybrid Architecture:
- *  - Tier 1: Instant Zero-Delay Frame Surface & Skin Exposure Analyzer
- *  - Tier 2: Deep Learning NSFWJS (MobileNet V2) Neural Network Classifier
+ * NSFWJS (TensorFlow.js) Intelligent Nudity & NSFW Content Shield for Omeglo
+ * Detects genuine pornography, explicit nudity, and flashing while allowing
+ * normal clothing variations (sleeveless vests/බැනියම්, singlets, tank tops, and bare shoulders).
  */
 
 let isNsfwLoading = false;
@@ -62,7 +60,7 @@ export async function initNsfwDetector(): Promise<boolean> {
       nsfwModel = await nsfwjs.load();
       isNsfwReady = true;
       isNsfwLoading = false;
-      console.log("✅ NSFWJS Deep Learning Realtime Nudity Model ready.");
+      console.log("✅ NSFWJS Intelligent Nudity Model loaded.");
       return true;
     }
 
@@ -83,7 +81,8 @@ export interface NsfwCheckResult {
 }
 
 /**
- * Hybrid real-time video frame classifier for nudity & explicit content
+ * Classify video frames with high precision.
+ * Distinguishes explicit pornography from standard casual wear (e.g. vests / singlets / tank tops).
  */
 export async function checkVideoFrame(videoElement: HTMLVideoElement): Promise<NsfwCheckResult> {
   if (!videoElement || videoElement.readyState < 2 || videoElement.videoWidth === 0) {
@@ -99,37 +98,6 @@ export async function checkVideoFrame(videoElement: HTMLVideoElement): Promise<N
 
     ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
 
-    // ==========================================
-    // Tier 1: Instant Surface Skin Exposure Analysis
-    // ==========================================
-    const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    const data = imgData.data;
-    const totalPixels = data.length / 4;
-    let skinPixelCount = 0;
-
-    for (let i = 0; i < data.length; i += 4) {
-      const r = data[i];
-      const g = data[i + 1];
-      const b = data[i + 2];
-
-      // Explicit skin tone & flesh coverage spectrum
-      const isFleshTone =
-        (r > 50 && g > 30 && b > 20 && r > g && r > b && (Math.max(r, g, b) - Math.min(r, g, b)) > 12 && Math.abs(r - g) > 10) ||
-        (r > 80 && g > 50 && b > 35 && (r - g) > 12 && (g - b) > 4);
-
-      if (isFleshTone) {
-        skinPixelCount++;
-      }
-    }
-
-    const skinExposureRatio = skinPixelCount / totalPixels;
-
-    // High skin exposure (> 30% of total screen without clothes/covered area)
-    const isHeavySkinExposure = skinExposureRatio > 0.28;
-
-    // ==========================================
-    // Tier 2: Deep Learning NSFWJS Classification
-    // ==========================================
     if (nsfwModel) {
       const predictions: Array<{ className: "Porn" | "Hentai" | "Sexy" | "Drawing" | "Neutral"; probability: number }> =
         await nsfwModel.classify(canvas);
@@ -139,36 +107,30 @@ export async function checkVideoFrame(videoElement: HTMLVideoElement): Promise<N
         const pornProb = predictions.find((p) => p.className === "Porn")?.probability || 0;
         const hentaiProb = predictions.find((p) => p.className === "Hentai")?.probability || 0;
         const sexyProb = predictions.find((p) => p.className === "Sexy")?.probability || 0;
+        const neutralProb = predictions.find((p) => p.className === "Neutral")?.probability || 0;
 
-        // Sensitive & Smart Multi-Class Decision Logic
-        const isModelNsfw =
-          pornProb > 0.35 ||
-          hentaiProb > 0.45 ||
-          (sexyProb > 0.60 && skinExposureRatio > 0.15) ||
-          (pornProb + sexyProb > 0.50 && skinExposureRatio > 0.12) ||
-          (isHeavySkinExposure && (pornProb > 0.20 || sexyProb > 0.30));
+        // ACCURATE DISCRIMINATION LOGIC:
+        // 1. Explicit Pornography / Genital Nudity: pornProb >= 0.52
+        // 2. Animated Porn: hentaiProb >= 0.65
+        // 3. Top classification is Porn with clear confidence: top.className === 'Porn' && pornProb >= 0.42
+        // Note: Casual wear, sleeveless vests (බැනියම්), singlets, and bare arms score high in 'Sexy' or 'Neutral', which are fully allowed!
+        const isExplicitPorn =
+          pornProb >= 0.52 ||
+          hentaiProb >= 0.65 ||
+          (top.className === "Porn" && pornProb >= 0.42 && pornProb > sexyProb);
 
-        if (isModelNsfw) {
+        if (isExplicitPorn) {
           return {
             isNsfw: true,
-            topCategory: pornProb > 0.35 ? "Porn" : top.className,
+            topCategory: "Porn",
             probability: Math.max(pornProb, top.probability),
             rawPredictions: predictions,
           };
         }
       }
     } else {
-      // Background warmup trigger if not loaded yet
+      // Warmup model in background
       initNsfwDetector().catch(() => {});
-    }
-
-    // Direct High-Confidence Flesh/Nudity Trigger (> 38% surface exposure)
-    if (skinExposureRatio > 0.38) {
-      return {
-        isNsfw: true,
-        topCategory: "Explicit Exposure",
-        probability: Math.min(0.95, skinExposureRatio * 2),
-      };
     }
 
     return { isNsfw: false, topCategory: "Neutral", probability: 1 };
