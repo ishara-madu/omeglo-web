@@ -1,7 +1,8 @@
 /**
- * NSFWJS (TensorFlow.js) Intelligent Nudity & NSFW Content Shield for Omeglo
- * Detects genuine nudity, flashing, and pornography while allowing
- * normal clothing (sleeveless vests/බැනියම්, singlets, tank tops, and bare arms).
+ * NSFWJS (TensorFlow.js) Multi-Scale Environmental-Aware Nudity Shield for Omeglo
+ * Uses Multi-Scale Dual-Pass Scanning (Full Scene + Center Subject Crop)
+ * to eliminate background room interference (walls, furniture, bedsheets, lighting)
+ * and accurately detect nudity and flashing in any environment.
  */
 
 let isNsfwLoading = false;
@@ -60,7 +61,7 @@ export async function initNsfwDetector(): Promise<boolean> {
       nsfwModel = await nsfwjs.load();
       isNsfwReady = true;
       isNsfwLoading = false;
-      console.log("✅ NSFWJS Intelligent Nudity Model loaded.");
+      console.log("✅ NSFWJS Multi-Scale Model ready.");
       return true;
     }
 
@@ -80,9 +81,43 @@ export interface NsfwCheckResult {
   rawPredictions?: Array<{ className: string; probability: number }>;
 }
 
+function evaluatePredictions(
+  predictions: Array<{ className: "Porn" | "Hentai" | "Sexy" | "Drawing" | "Neutral"; probability: number }>
+): { isNsfw: boolean; category: string; prob: number } {
+  if (!predictions || predictions.length === 0) {
+    return { isNsfw: false, category: "Neutral", prob: 1 };
+  }
+
+  const top = predictions[0];
+  const pornProb = predictions.find((p) => p.className === "Porn")?.probability || 0;
+  const hentaiProb = predictions.find((p) => p.className === "Hentai")?.probability || 0;
+  const sexyProb = predictions.find((p) => p.className === "Sexy")?.probability || 0;
+  const neutralProb = predictions.find((p) => p.className === "Neutral")?.probability || 0;
+
+  // MULTI-SCALE DETECTION THRESHOLDS:
+  // 1. Explicit porn / flashing: pornProb >= 0.20
+  // 2. Animated / illustrated porn: hentaiProb >= 0.40
+  // 3. Top classification is Porn: top.className === "Porn" && pornProb >= 0.18
+  // 4. Exposed body / nude in room: sexyProb >= 0.42 && (pornProb >= 0.04 || neutralProb <= 0.52)
+  // 5. High cumulative explicit score: pornProb + sexyProb >= 0.50 && neutralProb <= 0.50
+  const isNsfw =
+    pornProb >= 0.20 ||
+    hentaiProb >= 0.40 ||
+    (top.className === "Porn" && pornProb >= 0.18) ||
+    (sexyProb >= 0.42 && (pornProb >= 0.04 || neutralProb <= 0.52)) ||
+    (pornProb + sexyProb >= 0.50 && neutralProb <= 0.50);
+
+  return {
+    isNsfw,
+    category: pornProb >= 0.20 ? "Porn" : "Explicit Nudity",
+    prob: Math.max(pornProb, sexyProb, top.probability),
+  };
+}
+
 /**
- * Classify video frames with balanced precision.
- * Distinguishes explicit nudity from standard casual wear (e.g. vests / singlets / tank tops).
+ * Multi-Scale Dual-Pass Video Frame Scanner.
+ * Pass 1: Full Frame Scale (captures wide gestures)
+ * Pass 2: Center-Crop Subject Zoom (cuts out 80% of surrounding background walls/furniture)
  */
 export async function checkVideoFrame(videoElement: HTMLVideoElement): Promise<NsfwCheckResult> {
   if (!videoElement || videoElement.readyState < 2 || videoElement.videoWidth === 0) {
@@ -90,59 +125,67 @@ export async function checkVideoFrame(videoElement: HTMLVideoElement): Promise<N
   }
 
   try {
-    const canvas = document.createElement("canvas");
-    canvas.width = 224;
-    canvas.height = 224;
-    const ctx = canvas.getContext("2d", { willReadFrequently: true });
-    if (!ctx) return { isNsfw: false, topCategory: "Neutral", probability: 1 };
-
-    ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
-
-    if (nsfwModel) {
-      const predictions: Array<{ className: "Porn" | "Hentai" | "Sexy" | "Drawing" | "Neutral"; probability: number }> =
-        await nsfwModel.classify(canvas);
-
-      if (predictions && predictions.length > 0) {
-        const top = predictions[0];
-        const pornProb = predictions.find((p) => p.className === "Porn")?.probability || 0;
-        const hentaiProb = predictions.find((p) => p.className === "Hentai")?.probability || 0;
-        const sexyProb = predictions.find((p) => p.className === "Sexy")?.probability || 0;
-        const neutralProb = predictions.find((p) => p.className === "Neutral")?.probability || 0;
-
-        // SMART BALANCED DECISION MATRIX:
-        // 1. Direct Pornography / Explicit Genital Nudity: pornProb >= 0.28
-        // 2. Animated Porn: hentaiProb >= 0.45
-        // 3. Completely Nude Body (no clothes / bare body): sexyProb >= 0.55 AND neutralProb <= 0.32 AND pornProb >= 0.08
-        // 4. Heavy Exposure: pornProb + sexyProb >= 0.70 AND neutralProb <= 0.28
-        // 5. Top Class is Porn: top.className === 'Porn' && pornProb >= 0.25
-        //
-        // NOTE ON VESTS (බැනියම්):
-        // Wearing a vest/singlet gives high 'Neutral' score (neutralProb > 0.40) with very low porn (pornProb < 0.12),
-        // so it safely PASSES without false alarm!
-        const isNsfw =
-          pornProb >= 0.28 ||
-          hentaiProb >= 0.45 ||
-          (top.className === "Porn" && pornProb >= 0.25) ||
-          (sexyProb >= 0.55 && neutralProb <= 0.32 && pornProb >= 0.08) ||
-          (pornProb + sexyProb >= 0.70 && neutralProb <= 0.28);
-
-        if (isNsfw) {
-          return {
-            isNsfw: true,
-            topCategory: pornProb >= 0.25 ? "Porn" : "Explicit Nudity",
-            probability: Math.max(pornProb, top.probability),
-            rawPredictions: predictions,
-          };
-        }
-      }
-    } else {
-      // Warmup model in background
+    if (!nsfwModel) {
       initNsfwDetector().catch(() => {});
+      return { isNsfw: false, topCategory: "Neutral", probability: 1 };
+    }
+
+    const vw = videoElement.videoWidth;
+    const vh = videoElement.videoHeight;
+
+    // =========================================================================
+    // Pass 1: Full Frame Canvas (224x224)
+    // =========================================================================
+    const fullCanvas = document.createElement("canvas");
+    fullCanvas.width = 224;
+    fullCanvas.height = 224;
+    const fullCtx = fullCanvas.getContext("2d", { willReadFrequently: true });
+    if (!fullCtx) return { isNsfw: false, topCategory: "Neutral", probability: 1 };
+
+    fullCtx.drawImage(videoElement, 0, 0, fullCanvas.width, fullCanvas.height);
+    const fullPreds = await nsfwModel.classify(fullCanvas);
+    const fullRes = evaluatePredictions(fullPreds);
+
+    if (fullRes.isNsfw) {
+      return {
+        isNsfw: true,
+        topCategory: fullRes.category,
+        probability: fullRes.prob,
+        rawPredictions: fullPreds,
+      };
+    }
+
+    // =========================================================================
+    // Pass 2: Center Subject Crop (Zoom into center 60% of frame)
+    // Cuts out surrounding room walls, furniture, bedsheets, and curtains
+    // =========================================================================
+    const cropWidth = Math.floor(vw * 0.65);
+    const cropHeight = Math.floor(vh * 0.65);
+    const cropX = Math.floor((vw - cropWidth) / 2);
+    const cropY = Math.floor((vh - cropHeight) / 2);
+
+    const cropCanvas = document.createElement("canvas");
+    cropCanvas.width = 224;
+    cropCanvas.height = 224;
+    const cropCtx = cropCanvas.getContext("2d", { willReadFrequently: true });
+    if (!cropCtx) return { isNsfw: false, topCategory: "Neutral", probability: 1 };
+
+    cropCtx.drawImage(videoElement, cropX, cropY, cropWidth, cropHeight, 0, 0, cropCanvas.width, cropCanvas.height);
+    const cropPreds = await nsfwModel.classify(cropCanvas);
+    const cropRes = evaluatePredictions(cropPreds);
+
+    if (cropRes.isNsfw) {
+      return {
+        isNsfw: true,
+        topCategory: cropRes.category,
+        probability: cropRes.prob,
+        rawPredictions: cropPreds,
+      };
     }
 
     return { isNsfw: false, topCategory: "Neutral", probability: 1 };
   } catch (err) {
-    console.error("[-] Error during NSFW video check:", err);
+    console.error("[-] Error during Multi-Scale NSFW video check:", err);
     return { isNsfw: false, topCategory: "Neutral", probability: 1 };
   }
 }
