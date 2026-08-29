@@ -17,7 +17,7 @@ const io = new Server(server, {
 });
 
 const PORT = process.env.PORT || 5001;
-const ADMIN_SECRET = process.env.ADMIN_SECRET_KEY || "omeglo123";
+const ADMIN_SECRET = (process.env.ADMIN_SECRET_KEY || "").trim();
 
 // Helper: Check Admin Auth
 function checkAdminAuth(req, res, next) {
@@ -25,7 +25,7 @@ function checkAdminAuth(req, res, next) {
   const customKey = req.headers["x-admin-key"] || "";
   const token = auth.replace("Bearer ", "").trim() || customKey || req.query.key;
 
-  if (token === ADMIN_SECRET) {
+  if (ADMIN_SECRET && token === ADMIN_SECRET) {
     return next();
   }
   return res.status(401).json({ success: false, error: "Unauthorized" });

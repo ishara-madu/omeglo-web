@@ -158,7 +158,9 @@ export default function AdminPage() {
   // Fetch API Helper
   const apiFetch = useCallback(
     async (endpoint: string, options: RequestInit = {}) => {
-      const token = adminKey || sessionStorage.getItem("omeglo_admin_token") || "omeglo123";
+      const token =
+        adminKey ||
+        (typeof window !== "undefined" ? sessionStorage.getItem("omeglo_admin_token") || "" : "");
       const headers = {
         "Content-Type": "application/json",
         Authorization: `Bearer ${token}`,

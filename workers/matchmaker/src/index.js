@@ -75,15 +75,16 @@ export class Matchmaker {
       "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Admin-Key",
     };
 
-    // Helper: Check Admin Authentication (Passcode/Token)
+    // Helper: Check Admin Authentication strictly against Cloudflare Environment Variable / Secret
     const authHeader = request.headers.get("Authorization") || "";
     const customKeyHeader = request.headers.get("X-Admin-Key") || "";
-    const adminKey = this.env.ADMIN_SECRET_KEY || "omeglo123";
+    const adminKey = (this.env.ADMIN_SECRET_KEY || this.env.ADMIN_KEY || "").trim();
 
     const isAuthorized =
-      authHeader === `Bearer ${adminKey}` ||
-      customKeyHeader === adminKey ||
-      url.searchParams.get("key") === adminKey;
+      Boolean(adminKey) &&
+      (authHeader === `Bearer ${adminKey}` ||
+        customKeyHeader === adminKey ||
+        url.searchParams.get("key") === adminKey);
 
     // ==========================================
     // Admin API Routes
