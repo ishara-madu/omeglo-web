@@ -2519,8 +2519,14 @@ export default function Home() {
             {/* DISCONNECTED STATE WITH AUTO-NEXT COUNTDOWN */}
             {status === "disconnected" && (
               <div className="flex flex-col items-center gap-3.5 p-6 text-center select-none z-10 max-w-xs animate-in fade-in">
-                <div className="flex items-center justify-center text-zinc-400 mb-1">
-                  <Info className="w-10 h-10 stroke-[1.5]" />
+                <div className="flex items-center justify-center mb-1">
+                  <Image
+                    src="/call-disconnected.svg"
+                    alt="Stranger Disconnected"
+                    width={48}
+                    height={48}
+                    className="w-12 h-12 object-contain drop-shadow-md"
+                  />
                 </div>
                 <div className="space-y-1">
                   <p className="text-zinc-200 font-semibold text-sm">Stranger Disconnected</p>
