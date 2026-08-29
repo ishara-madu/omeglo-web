@@ -319,9 +319,19 @@ const SOCKET_URL =
   process.env.NEXT_PUBLIC_SERVER_URL ||
   "https://omeglo-backend.pocoma3486.workers.dev";
 
-export default function Home() {
+export default function Home({ initialMode }: { initialMode?: ChatMode } = {}) {
   const [status, setStatus] = useState<ConnectionStatus>("idle");
-  const [chatMode, setChatMode] = useState<ChatMode>("video");
+  const [chatMode, setChatMode] = useState<ChatMode>(() => {
+    if (initialMode) return initialMode;
+    if (typeof window !== "undefined") {
+      if (window.location.pathname.startsWith("/text")) return "text";
+      try {
+        const saved = localStorage.getItem("omeglo_chat_mode") as ChatMode;
+        if (saved === "text" || saved === "video") return saved;
+      } catch {}
+    }
+    return "video";
+  });
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: "sys-1",
@@ -333,7 +343,15 @@ export default function Home() {
   const [inputMessage, setInputMessage] = useState("");
   const [isMicMuted, setIsMicMuted] = useState(false);
   const isMicMutedRef = useRef(isMicMuted);
-  const [isSoundMuted, setIsSoundMuted] = useState(false);
+  const [isSoundMuted, setIsSoundMuted] = useState<boolean>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const saved = localStorage.getItem("omeglo_sound_muted");
+        if (saved !== null) return saved === "true";
+      } catch {}
+    }
+    return false;
+  });
   const isSoundMutedRef = useRef(isSoundMuted);
   const [isStrangerTyping, setIsStrangerTyping] = useState(false);
   const [onlineCount, setOnlineCount] = useState("1");
@@ -383,12 +401,28 @@ export default function Home() {
   const [isFlippingCamera, setIsFlippingCamera] = useState(false);
 
   // User Gender State & First-time Visit Modal
-  const [userGender, setUserGender] = useState<Gender>(null);
+  const [userGender, setUserGender] = useState<Gender>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const saved = localStorage.getItem("omeglo_user_gender") as Gender;
+        if (saved === "male" || saved === "female") return saved;
+      } catch {}
+    }
+    return null;
+  });
   const [showGenderModal, setShowGenderModal] = useState(false);
   const [tempSelectedGender, setTempSelectedGender] = useState<"male" | "female">("male");
 
   // Match Preference / Looking For Filter (Any / Female / Male)
-  const [matchPreference, setMatchPreference] = useState<MatchPreference>("any");
+  const [matchPreference, setMatchPreference] = useState<MatchPreference>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const saved = localStorage.getItem("omeglo_match_pref") as MatchPreference;
+        if (saved === "any" || saved === "female" || saved === "male") return saved;
+      } catch {}
+    }
+    return "any";
+  });
 
   const userGenderRef = useRef(userGender);
   useEffect(() => {
@@ -1024,35 +1058,13 @@ export default function Home() {
     // Pre-warm text toxicity AI moderation model in background
     initToxicityDetector().catch(() => { });
 
-    // 1. Check localStorage for preferences
+    // 1. Check if user needs first-time gender modal
     try {
       const savedGender = localStorage.getItem("omeglo_user_gender") as Gender;
       if (savedGender === "male" || savedGender === "female") {
-        setUserGender(savedGender);
         setTempSelectedGender(savedGender);
       } else {
         setShowGenderModal(true);
-      }
-
-      const savedPref = localStorage.getItem("omeglo_match_pref") as MatchPreference;
-      if (savedPref === "any" || savedPref === "female" || savedPref === "male") {
-        setMatchPreference(savedPref);
-      }
-
-      const savedMode = localStorage.getItem("omeglo_chat_mode") as ChatMode;
-      if (savedMode === "video" || savedMode === "text") {
-        setChatMode(savedMode);
-        chatModeRef.current = savedMode;
-        if (savedMode === "text") {
-          stopLocalStream();
-        }
-      }
-
-      const savedSoundMuted = localStorage.getItem("omeglo_sound_muted");
-      if (savedSoundMuted !== null) {
-        const isMuted = savedSoundMuted === "true";
-        setIsSoundMuted(isMuted);
-        isSoundMutedRef.current = isMuted;
       }
     } catch {
       setShowGenderModal(true);
@@ -1353,6 +1365,12 @@ export default function Home() {
     chatModeRef.current = mode;
     try {
       localStorage.setItem("omeglo_chat_mode", mode);
+      if (typeof window !== "undefined") {
+        const targetPath = mode === "text" ? "/text" : "/";
+        if (window.location.pathname !== targetPath) {
+          window.history.pushState(null, "", targetPath);
+        }
+      }
     } catch { }
 
     if (mode === "video") {
@@ -1363,6 +1381,21 @@ export default function Home() {
       cleanupCall();
     }
   };
+
+  // Browser Back/Forward navigation sync
+  useEffect(() => {
+    const handlePopState = () => {
+      if (typeof window !== "undefined") {
+        const path = window.location.pathname;
+        const targetMode: ChatMode = path.startsWith("/text") ? "text" : "video";
+        if (chatModeRef.current !== targetMode) {
+          handleModeChange(targetMode);
+        }
+      }
+    };
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
 
   // Auto-scroll chat internally (only inside the chat box container, preventing whole-page scrolling)
   useEffect(() => {
