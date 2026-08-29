@@ -41,6 +41,7 @@ import {
   Maximize2,
   Minimize2,
   ArrowLeftRight,
+  Scan,
 } from "lucide-react";
 import { getBrowserFingerprint } from "@/lib/fingerprint";
 import { filterMessage } from "@/lib/moderation/regexFilter";
@@ -2624,38 +2625,31 @@ export default function Home() {
                   </div>
                 )}
 
-                {/* Tap-to-Show Full Action Overlay (Mic, Flip Cam & Big Center Swap Button) */}
+                {/* Tap-to-Show Full Action Overlay (Scan / Swap Icon in Center, Bottom Mic & Flip Cam) */}
                 {showPipControls && (
                   <div
-                    onClick={(e) => e.stopPropagation()}
-                    className="absolute inset-0 bg-black/55 backdrop-blur-[2px] z-20 flex flex-col justify-between p-2 animate-in fade-in duration-150"
+                    onClick={(e) => {
+                      if ((e.target as HTMLElement).closest("button") || (e.target as HTMLElement).closest(".resize-handle")) return;
+                      setShowPipControls(false);
+                    }}
+                    className="absolute inset-0 bg-black/45 backdrop-blur-[1px] z-20 flex flex-col justify-between p-2 animate-in fade-in duration-150 cursor-pointer"
                   >
-                    {/* Top Header inside overlay */}
-                    <div className="flex items-center justify-between w-full">
-                      <span className="text-[9px] text-zinc-300 font-semibold uppercase tracking-wider px-1">
-                        {!isSwappedFeeds ? "Your Cam" : "Stranger"}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => setShowPipControls(false)}
-                        className="w-5 h-5 rounded-full bg-white/15 hover:bg-white/30 text-white flex items-center justify-center text-xs transition-colors cursor-pointer"
-                      >
-                        <X className="w-3 h-3" />
-                      </button>
-                    </div>
+                    {/* Top Spacer */}
+                    <div className="w-full h-4 pointer-events-none" />
 
-                    {/* Center Full-Screen / Swap Feed Action Button */}
+                    {/* Center Scan / Swap Feed Action Icon (Pure Borderless Clean Icon) */}
                     <div className="flex items-center justify-center my-auto">
                       <button
                         type="button"
-                        onClick={() => {
+                        onClick={(e) => {
+                          e.stopPropagation();
                           setIsSwappedFeeds((prev) => !prev);
                           setShowPipControls(false);
                         }}
-                        title={isSwappedFeeds ? "Return Stranger to Full Screen" : "Make Your Camera Full Screen"}
-                        className="w-10 h-10 rounded-full bg-white/30 hover:bg-white/50 active:scale-90 text-white flex items-center justify-center backdrop-blur-md shadow-xl border border-white/40 transition-all cursor-pointer group"
+                        title={isSwappedFeeds ? "Return Stranger to Full Screen" : "Make Your Camera Full Screen (WhatsApp Style)"}
+                        className="p-2 text-white/90 hover:text-white active:scale-90 transition-all cursor-pointer group"
                       >
-                        <ArrowLeftRight className="w-4.5 h-4.5 text-white drop-shadow group-hover:scale-110 transition-transform" />
+                        <Scan className="w-10 h-10 sm:w-11 sm:h-11 text-white drop-shadow-[0_2px_10px_rgba(0,0,0,0.85)] group-hover:scale-110 transition-transform stroke-[1.75]" />
                       </button>
                     </div>
 
