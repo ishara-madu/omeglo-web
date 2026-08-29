@@ -2500,8 +2500,14 @@ export default function Home() {
             {/* IDLE STATE */}
             {status === "idle" && (
               <div className="flex flex-col items-center gap-3.5 p-6 text-center select-none pointer-events-none z-0">
-                <div className="flex items-center justify-center text-zinc-500 mb-1">
-                  {chatMode === "text" ? <MessageSquare className="w-12 h-12 stroke-[1.5]" /> : <User className="w-12 h-12 stroke-[1.5]" />}
+                <div className="flex items-center justify-center mb-1">
+                  <Image
+                    src={chatMode === "text" ? "/chat-text.svg" : "/chat-video.svg"}
+                    alt={chatMode === "text" ? "Ready for Text Chat" : "Ready for Video Chat"}
+                    width={48}
+                    height={48}
+                    className="w-12 h-12 object-contain drop-shadow-md"
+                  />
                 </div>
                 <div className="space-y-1">
                   <p className="text-zinc-200 font-semibold text-sm">
