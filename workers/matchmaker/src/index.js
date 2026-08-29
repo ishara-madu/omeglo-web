@@ -161,12 +161,6 @@ export class Matchmaker {
           }))
           .sort((a, b) => b.count - a.count);
 
-        if (geoStats.length === 0) {
-          geoStats = [
-            { country: "LK", name: "Sri Lanka", flag: "🇱🇰", count: Math.max(1, this.sockets.size), percentage: 100 }
-          ];
-        }
-
         return new Response(
           JSON.stringify({
             success: true,
