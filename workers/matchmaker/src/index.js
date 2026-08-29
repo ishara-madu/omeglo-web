@@ -34,19 +34,28 @@ export class Matchmaker {
   recordVisitor(country) {
     const c = (country || "LK").toUpperCase();
     if (!this.pendingAnalytics.has(c)) {
-      this.pendingAnalytics.set(c, { visitors: 0, calls: 0, duration: 0 });
+      this.pendingAnalytics.set(c, { visitors: 0, calls: 0, duration: 0, videoCalls: 0, videoDuration: 0, textCalls: 0, textDuration: 0 });
     }
     this.pendingAnalytics.get(c).visitors += 1;
   }
 
-  recordCallDuration(country, durationSecs = 0) {
+  recordCallDuration(country, durationSecs = 0, mode = "video") {
     const c = (country || "LK").toUpperCase();
     if (!this.pendingAnalytics.has(c)) {
-      this.pendingAnalytics.set(c, { visitors: 0, calls: 0, duration: 0 });
+      this.pendingAnalytics.set(c, { visitors: 0, calls: 0, duration: 0, videoCalls: 0, videoDuration: 0, textCalls: 0, textDuration: 0 });
     }
     const entry = this.pendingAnalytics.get(c);
+    const dur = Math.max(1, durationSecs);
     entry.calls += 1;
-    entry.duration += Math.max(1, durationSecs);
+    entry.duration += dur;
+
+    if (mode === "text") {
+      entry.textCalls = (entry.textCalls || 0) + 1;
+      entry.textDuration = (entry.textDuration || 0) + dur;
+    } else {
+      entry.videoCalls = (entry.videoCalls || 0) + 1;
+      entry.videoDuration = (entry.videoDuration || 0) + dur;
+    }
 
     // If 3+ minutes passed or 20+ records queued, flush asynchronously
     if (Date.now() - this.lastFlushTs > 180000 || this.pendingAnalytics.size >= 20) {
@@ -74,14 +83,29 @@ export class Matchmaker {
       try {
         const name = countryNames[country] || country;
         await this.env.DB.prepare(
-          `INSERT INTO daily_traffic_stats (date, country, country_name, total_visitors, total_calls, total_duration_seconds)
-           VALUES (?, ?, ?, ?, ?, ?)
+          `INSERT INTO daily_traffic_stats (date, country, country_name, total_visitors, total_calls, total_duration_seconds, video_calls, video_duration_seconds, text_calls, text_duration_seconds)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT(date, country) DO UPDATE SET
              total_visitors = total_visitors + excluded.total_visitors,
              total_calls = total_calls + excluded.total_calls,
-             total_duration_seconds = total_duration_seconds + excluded.total_duration_seconds`
+             total_duration_seconds = total_duration_seconds + excluded.total_duration_seconds,
+             video_calls = COALESCE(video_calls, 0) + excluded.video_calls,
+             video_duration_seconds = COALESCE(video_duration_seconds, 0) + excluded.video_duration_seconds,
+             text_calls = COALESCE(text_calls, 0) + excluded.text_calls,
+             text_duration_seconds = COALESCE(text_duration_seconds, 0) + excluded.text_duration_seconds`
         )
-          .bind(today, country, name, stats.visitors, stats.calls, stats.duration)
+          .bind(
+            today,
+            country,
+            name,
+            stats.visitors || 0,
+            stats.calls || 0,
+            stats.duration || 0,
+            stats.videoCalls || 0,
+            stats.videoDuration || 0,
+            stats.textCalls || 0,
+            stats.textDuration || 0
+          )
           .run();
       } catch (err) {
         console.error("Flush analytics error for", country, err);
@@ -244,28 +268,33 @@ export class Matchmaker {
         );
       }
 
-      // 1.1 Admin Historical Traffic & Duration Analytics (1d, 7d, 28d, 90d)
+      // 1.5 Admin Traffic & Duration Analytics (Aggregated 1D, 7D, 28D, 90D with Mode Filter)
       if (url.pathname === "/api/admin/analytics") {
         const range = url.searchParams.get("range") || "7d";
-        const daysMap = { "1d": 1, "7d": 7, "28d": 28, "90d": 90 };
-        const days = daysMap[range] || 7;
+        const selectedMode = url.searchParams.get("mode") || "all"; // 'all', 'video', 'text'
+        const days = range === "1d" ? 1 : range === "28d" ? 28 : range === "90d" ? 90 : 7;
 
-        // Flush pending buffer before reading
-        await this.flushAnalytics();
-
-        let timeline = [];
-        let countryStats = [];
         let summary = {
           totalVisitors: 0,
           totalCalls: 0,
           totalDurationSeconds: 0,
           avgCallDurationSeconds: 0,
+          videoCalls: 0,
+          videoDurationSeconds: 0,
+          textCalls: 0,
+          textDurationSeconds: 0,
         };
+        let timeline = [];
+        let countryStats = [];
 
         if (this.env.DB) {
           try {
             const res = await this.env.DB.prepare(
-              `SELECT date, country, country_name, total_visitors, total_calls, total_duration_seconds
+              `SELECT date, country, country_name, total_visitors, total_calls, total_duration_seconds, 
+                      COALESCE(video_calls, 0) AS video_calls,
+                      COALESCE(video_duration_seconds, 0) AS video_duration_seconds,
+                      COALESCE(text_calls, 0) AS text_calls,
+                      COALESCE(text_duration_seconds, 0) AS text_duration_seconds
                FROM daily_traffic_stats
                WHERE date >= date('now', '-${days} days')
                ORDER BY date ASC`
@@ -277,16 +306,38 @@ export class Matchmaker {
 
             for (const r of rows) {
               summary.totalVisitors += r.total_visitors || 0;
-              summary.totalCalls += r.total_calls || 0;
-              summary.totalDurationSeconds += r.total_duration_seconds || 0;
+              summary.videoCalls += r.video_calls || 0;
+              summary.videoDurationSeconds += r.video_duration_seconds || 0;
+              summary.textCalls += r.text_calls || 0;
+              summary.textDurationSeconds += r.text_duration_seconds || 0;
+
+              // Filter calls and duration by selectedMode
+              const rowCalls =
+                selectedMode === "video"
+                  ? r.video_calls || 0
+                  : selectedMode === "text"
+                  ? r.text_calls || 0
+                  : r.total_calls || 0;
+
+              const rowDuration =
+                selectedMode === "video"
+                  ? r.video_duration_seconds || 0
+                  : selectedMode === "text"
+                  ? r.text_duration_seconds || 0
+                  : r.total_duration_seconds || 0;
+
+              summary.totalCalls += rowCalls;
+              summary.totalDurationSeconds += rowDuration;
 
               // Aggregate by date for timeline chart
               if (!dateMap[r.date]) {
-                dateMap[r.date] = { date: r.date, visitors: 0, calls: 0, durationMinutes: 0 };
+                dateMap[r.date] = { date: r.date, visitors: 0, calls: 0, durationMinutes: 0, videoCalls: 0, textCalls: 0 };
               }
               dateMap[r.date].visitors += r.total_visitors || 0;
-              dateMap[r.date].calls += r.total_calls || 0;
-              dateMap[r.date].durationMinutes += Math.round((r.total_duration_seconds || 0) / 60);
+              dateMap[r.date].calls += rowCalls;
+              dateMap[r.date].durationMinutes += Math.round(rowDuration / 60);
+              dateMap[r.date].videoCalls += r.video_calls || 0;
+              dateMap[r.date].textCalls += r.text_calls || 0;
 
               // Aggregate by country
               const c = r.country;
@@ -297,11 +348,15 @@ export class Matchmaker {
                   visitors: 0,
                   calls: 0,
                   durationSeconds: 0,
+                  videoCalls: 0,
+                  textCalls: 0,
                 };
               }
               countryAgg[c].visitors += r.total_visitors || 0;
-              countryAgg[c].calls += r.total_calls || 0;
-              countryAgg[c].durationSeconds += r.total_duration_seconds || 0;
+              countryAgg[c].calls += rowCalls;
+              countryAgg[c].durationSeconds += rowDuration;
+              countryAgg[c].videoCalls += r.video_calls || 0;
+              countryAgg[c].textCalls += r.text_calls || 0;
             }
 
             timeline = Object.values(dateMap);
@@ -321,6 +376,8 @@ export class Matchmaker {
                 flag: getFlag(c.country),
                 visitors: c.visitors,
                 calls: c.calls,
+                videoCalls: c.videoCalls,
+                textCalls: c.textCalls,
                 totalDurationMinutes: Math.round(c.durationSeconds / 60),
                 avgDurationSeconds: c.calls > 0 ? Math.round(c.durationSeconds / c.calls) : 0,
               }))
@@ -334,6 +391,7 @@ export class Matchmaker {
           JSON.stringify({
             success: true,
             range,
+            mode: selectedMode,
             summary,
             timeline,
             countryStats,
@@ -858,7 +916,7 @@ export class Matchmaker {
       const pair = this.activePairs.get(socketId);
       const durationSecs = pair.matchedAt ? Math.round((Date.now() - pair.matchedAt) / 1000) : 0;
       if (durationSecs > 0) {
-        this.recordCallDuration(pair.country, durationSecs);
+        this.recordCallDuration(pair.country, durationSecs, pair.mode || "video");
       }
       this.activePairs.delete(socketId);
 
@@ -866,7 +924,7 @@ export class Matchmaker {
         const partnerPair = this.activePairs.get(pair.partnerSocketId);
         const partnerDuration = partnerPair.matchedAt ? Math.round((Date.now() - partnerPair.matchedAt) / 1000) : 0;
         if (partnerDuration > 0) {
-          this.recordCallDuration(partnerPair.country, partnerDuration);
+          this.recordCallDuration(partnerPair.country, partnerDuration, partnerPair.mode || "video");
         }
         this.activePairs.delete(pair.partnerSocketId);
         this.emit(pair.partnerSocketId, "partner-disconnected", {});

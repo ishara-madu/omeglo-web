@@ -331,6 +331,7 @@ export default function Home() {
   const [onlineCount, setOnlineCount] = useState("1");
   const [strangerGender, setStrangerGender] = useState<Gender>(null);
   const [strangerCountry, setStrangerCountry] = useState<string | null>(null);
+  const [isStrangerMuted, setIsStrangerMuted] = useState(false);
 
   // Keep isMicMutedRef and hardware audio tracks always strictly in sync
   useEffect(() => {
@@ -672,6 +673,9 @@ export default function Home() {
     conn.on("open", () => {
       console.log("🟢 PeerJS P2P DataChannel connected and ready for live chat.");
       sendMicroThumbnail(conn);
+      try {
+        conn.send(JSON.stringify({ type: "mic-status", isMuted: isMicMutedRef.current }));
+      } catch { }
     });
 
     conn.on("data", (data: unknown) => {
@@ -679,6 +683,10 @@ export default function Home() {
         // 1. Check if packet is JSON control message
         try {
           const parsed = JSON.parse(data);
+          if (parsed && parsed.type === "mic-status") {
+            setIsStrangerMuted(Boolean(parsed.isMuted));
+            return;
+          }
           if (parsed && parsed.type === "typing") {
             setIsStrangerTyping(parsed.isTyping);
             if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
@@ -976,6 +984,7 @@ export default function Home() {
       dataConnRef.current = null;
     }
     setIsStrangerTyping(false);
+    setIsStrangerMuted(false);
     setLiveCallQuality("good");
     setRemoteStream(null);
     setRemoteMicroPreview(null);
@@ -1530,7 +1539,7 @@ export default function Home() {
 
 
 
-  // Handle Mic Mute Toggle (Ensures complete hardware sync with state)
+  // Handle Mic Mute Toggle (Ensures complete hardware sync with state & notifies partner in real-time)
   const toggleMic = () => {
     setIsMicMuted((prev) => {
       const nextMuted = !prev;
@@ -1539,6 +1548,11 @@ export default function Home() {
         localStreamRef.current.getAudioTracks().forEach((track) => {
           track.enabled = !nextMuted;
         });
+      }
+      if (dataConnRef.current && dataConnRef.current.open) {
+        try {
+          dataConnRef.current.send(JSON.stringify({ type: "mic-status", isMuted: nextMuted }));
+        } catch { }
       }
       return nextMuted;
     });
@@ -2375,9 +2389,17 @@ export default function Home() {
               </span>
             </div>
 
-            {/* Quality, Report & Swap Back Badges (Top Right) */}
+            {/* Quality, Remote Mute, Report & Swap Back Badges (Top Right) */}
             {status === "connected" && (
               <div className="absolute top-4 right-4 z-10 flex items-center gap-1.5">
+                {/* Stranger Mute Indicator (Shows when the partner has muted their microphone) */}
+                {chatMode === "video" && !isSwappedFeeds && isStrangerMuted && (
+                  <div className="bg-red-950/80 backdrop-blur-md text-red-300 px-2.5 py-1 rounded-full border border-red-500/40 text-[11px] font-semibold flex items-center gap-1.5 shadow-sm animate-in fade-in duration-200">
+                    <MicOff className="w-3 h-3 text-red-400" />
+                    <span>Stranger Muted</span>
+                  </div>
+                )}
+
                 {isSwappedFeeds && (
                   <button
                     type="button"

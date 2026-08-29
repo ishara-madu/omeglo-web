@@ -65,6 +65,10 @@ CREATE TABLE IF NOT EXISTS daily_traffic_stats (
   total_visitors INTEGER DEFAULT 0,
   total_calls INTEGER DEFAULT 0,
   total_duration_seconds INTEGER DEFAULT 0,
+  video_calls INTEGER DEFAULT 0,
+  video_duration_seconds INTEGER DEFAULT 0,
+  text_calls INTEGER DEFAULT 0,
+  text_duration_seconds INTEGER DEFAULT 0,
   PRIMARY KEY (date, country)
 );
 

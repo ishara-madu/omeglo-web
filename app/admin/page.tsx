@@ -111,12 +111,16 @@ type BanItem = {
   expires_at: string | null;
 };
 
-// Analytics Data Types (1D, 7D, 28D, 90D)
+// Analytics Data Types (1D, 7D, 28D, 90D with Mode Breakdown)
 type AnalyticsSummary = {
   totalVisitors: number;
   totalCalls: number;
   totalDurationSeconds: number;
   avgCallDurationSeconds: number;
+  videoCalls?: number;
+  videoDurationSeconds?: number;
+  textCalls?: number;
+  textDurationSeconds?: number;
 };
 
 type TimelinePoint = {
@@ -124,6 +128,8 @@ type TimelinePoint = {
   visitors: number;
   calls: number;
   durationMinutes: number;
+  videoCalls?: number;
+  textCalls?: number;
 };
 
 type CountryStatItem = {
@@ -132,12 +138,15 @@ type CountryStatItem = {
   flag: string;
   visitors: number;
   calls: number;
+  videoCalls?: number;
+  textCalls?: number;
   totalDurationMinutes: number;
   avgDurationSeconds: number;
 };
 
 type AnalyticsData = {
   range: string;
+  mode?: string;
   summary: AnalyticsSummary;
   timeline: TimelinePoint[];
   countryStats: CountryStatItem[];
@@ -169,8 +178,9 @@ export default function AdminPage() {
   const [quarantineList, setQuarantineList] = useState<QuarantineItem[]>([]);
   const [bansList, setBansList] = useState<BanItem[]>([]);
 
-  // Historical Analytics State (1d, 7d, 28d, 90d)
+  // Historical Analytics State (1d, 7d, 28d, 90d + all, video, text)
   const [analyticsRange, setAnalyticsRange] = useState<"1d" | "7d" | "28d" | "90d">("7d");
+  const [analyticsMode, setAnalyticsMode] = useState<"all" | "video" | "text">("all");
   const [analyticsData, setAnalyticsData] = useState<AnalyticsData | null>(null);
 
   // Selection state for Batch Actions
@@ -259,7 +269,7 @@ export default function AdminPage() {
         !force &&
         cached &&
         now - cached.ts < 20000 &&
-        (activeTab !== "analytics" || (cacheRef.current.analytics && cacheRef.current.analytics.range === analyticsRange))
+        (activeTab !== "analytics" || (cacheRef.current.analytics && cacheRef.current.analytics.range === `${analyticsRange}-${analyticsMode}`))
       ) {
         // Re-use cached tab data! 0 HTTP requests!
         if (activeTab === "overview") setOverview(cached.data as OverviewData);
@@ -279,10 +289,10 @@ export default function AdminPage() {
             cacheRef.current.overview = { data: data.overview, ts: Date.now() };
           }
         } else if (activeTab === "analytics") {
-          const data = await apiFetch(`/api/admin/analytics?range=${analyticsRange}`);
+          const data = await apiFetch(`/api/admin/analytics?range=${analyticsRange}&mode=${analyticsMode}`);
           if (data.success) {
             setAnalyticsData(data);
-            cacheRef.current.analytics = { data, ts: Date.now(), range: analyticsRange };
+            cacheRef.current.analytics = { data, ts: Date.now(), range: `${analyticsRange}-${analyticsMode}` };
           }
         } else if (activeTab === "reports") {
           const data = await apiFetch("/api/admin/reports");
@@ -309,14 +319,14 @@ export default function AdminPage() {
         setIsLoading(false);
       }
     },
-    [activeTab, analyticsRange, apiFetch, isAuthenticated]
+    [activeTab, analyticsRange, analyticsMode, apiFetch, isAuthenticated]
   );
 
   useEffect(() => {
-    loadData(false);
     setSelectedReportIds(new Set());
     setSelectedBanIds(new Set());
-  }, [loadData, activeTab, analyticsRange]);
+    loadData();
+  }, [isAuthenticated, activeTab, analyticsRange, analyticsMode]);
 
   // Handle Login PIN submission
   const handleLogin = async (e: React.FormEvent) => {
@@ -1012,42 +1022,65 @@ export default function AdminPage() {
         )}
 
         {/* =========================================================================
-            TAB 1.5: TRAFFIC & DURATION ANALYTICS (1D, 7D, 28D, 90D)
+            TAB 1.5: TRAFFIC & DURATION ANALYTICS (1D, 7D, 28D, 90D + VIDEO / TEXT BREAKDOWN)
             ========================================================================= */}
         {activeTab === "analytics" && (
           <div className="space-y-6 animate-in fade-in duration-200">
-            {/* Range Selector Header */}
-            <div className="bg-zinc-900/60 border border-zinc-800/80 rounded-3xl p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            {/* Range & Mode Selector Header */}
+            <div className="bg-zinc-900/60 border border-zinc-800/80 rounded-3xl p-5 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
               <div>
                 <h2 className="text-base font-bold text-white flex items-center gap-2">
                   <BarChart3 className="w-5 h-5 text-cyan-400" />
                   <span>Traffic & Engagement Duration Analytics</span>
                 </h2>
                 <p className="text-xs text-zinc-400 mt-0.5">
-                  Historical aggregated visitor volume, total completed video calls, and call durations.
+                  Historical aggregated visitor volume, completed video calls, text chats, and engagement times.
                 </p>
               </div>
 
-              {/* Range Selector Pills */}
-              <div className="flex items-center bg-zinc-950 border border-zinc-800 rounded-2xl p-1 text-xs">
-                {[
-                  { id: "1d", label: "24 Hours" },
-                  { id: "7d", label: "7 Days" },
-                  { id: "28d", label: "28 Days" },
-                  { id: "90d", label: "3 Months (90D)" },
-                ].map((r) => (
-                  <button
-                    key={r.id}
-                    onClick={() => setAnalyticsRange(r.id as any)}
-                    className={`px-3 py-1.5 rounded-xl font-semibold transition-all cursor-pointer text-[11px] ${
-                      analyticsRange === r.id
-                        ? "bg-cyan-500 text-zinc-950 font-bold shadow-xs"
-                        : "text-zinc-400 hover:text-white"
-                    }`}
-                  >
-                    {r.label}
-                  </button>
-                ))}
+              <div className="flex flex-wrap items-center gap-2.5">
+                {/* Mode Filter Selector */}
+                <div className="flex items-center bg-zinc-950 border border-zinc-800 rounded-2xl p-1 text-xs">
+                  {[
+                    { id: "all", label: "🌐 All Traffic" },
+                    { id: "video", label: "📹 Video Only" },
+                    { id: "text", label: "💬 Chat (Text) Only" },
+                  ].map((m) => (
+                    <button
+                      key={m.id}
+                      onClick={() => setAnalyticsMode(m.id as any)}
+                      className={`px-3 py-1.5 rounded-xl font-semibold transition-all cursor-pointer text-[11px] ${
+                        analyticsMode === m.id
+                          ? "bg-emerald-500 text-zinc-950 font-bold shadow-xs"
+                          : "text-zinc-400 hover:text-white"
+                      }`}
+                    >
+                      {m.label}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Range Selector Pills */}
+                <div className="flex items-center bg-zinc-950 border border-zinc-800 rounded-2xl p-1 text-xs">
+                  {[
+                    { id: "1d", label: "24 Hours" },
+                    { id: "7d", label: "7 Days" },
+                    { id: "28d", label: "28 Days" },
+                    { id: "90d", label: "3 Months (90D)" },
+                  ].map((r) => (
+                    <button
+                      key={r.id}
+                      onClick={() => setAnalyticsRange(r.id as any)}
+                      className={`px-3 py-1.5 rounded-xl font-semibold transition-all cursor-pointer text-[11px] ${
+                        analyticsRange === r.id
+                          ? "bg-cyan-500 text-zinc-950 font-bold shadow-xs"
+                          : "text-zinc-400 hover:text-white"
+                      }`}
+                    >
+                      {r.label}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
 
@@ -1066,29 +1099,39 @@ export default function AdminPage() {
 
               <div className="bg-zinc-900/60 border border-zinc-800/80 rounded-3xl p-5 shadow-xs">
                 <div className="flex items-center justify-between text-zinc-400 mb-2">
-                  <span className="text-xs font-medium uppercase tracking-wider">Completed Calls</span>
+                  <span className="text-xs font-medium uppercase tracking-wider">
+                    {analyticsMode === "video" ? "Video Calls" : analyticsMode === "text" ? "Text Chats" : "Completed Matches"}
+                  </span>
                   <PhoneCall className="w-4 h-4 text-emerald-400" />
                 </div>
                 <div className="text-2xl sm:text-3xl font-black text-emerald-300 font-mono">
                   {analyticsData?.summary?.totalCalls ?? 0}
                 </div>
-                <div className="text-[11px] text-zinc-500 mt-1">Video chats successfully matched</div>
+                <div className="text-[11px] text-zinc-500 mt-1">
+                  {analyticsMode === "all"
+                    ? `Video: ${analyticsData?.summary?.videoCalls ?? 0} | Text: ${analyticsData?.summary?.textCalls ?? 0}`
+                    : analyticsMode === "video"
+                    ? "Video calls successfully matched"
+                    : "Encrypted text chats completed"}
+                </div>
               </div>
 
               <div className="bg-zinc-900/60 border border-zinc-800/80 rounded-3xl p-5 shadow-xs">
                 <div className="flex items-center justify-between text-zinc-400 mb-2">
-                  <span className="text-xs font-medium uppercase tracking-wider">Total Time Spent</span>
+                  <span className="text-xs font-medium uppercase tracking-wider">
+                    {analyticsMode === "video" ? "Video Talk Time" : analyticsMode === "text" ? "Text Chat Time" : "Total Time Spent"}
+                  </span>
                   <Timer className="w-4 h-4 text-purple-400" />
                 </div>
                 <div className="text-2xl sm:text-3xl font-black text-purple-300 font-mono">
                   {formatDuration(analyticsData?.summary?.totalDurationSeconds ?? 0)}
                 </div>
-                <div className="text-[11px] text-zinc-500 mt-1">Accumulated call talk time</div>
+                <div className="text-[11px] text-zinc-500 mt-1">Accumulated {analyticsMode} duration</div>
               </div>
 
               <div className="bg-zinc-900/60 border border-zinc-800/80 rounded-3xl p-5 shadow-xs">
                 <div className="flex items-center justify-between text-zinc-400 mb-2">
-                  <span className="text-xs font-medium uppercase tracking-wider">Avg Call Duration</span>
+                  <span className="text-xs font-medium uppercase tracking-wider">Avg Duration</span>
                   <Sparkles className="w-4 h-4 text-amber-400" />
                 </div>
                 <div className="text-2xl sm:text-3xl font-black text-amber-300 font-mono">
