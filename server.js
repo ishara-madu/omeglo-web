@@ -17,6 +17,146 @@ const io = new Server(server, {
 });
 
 const PORT = process.env.PORT || 5001;
+const ADMIN_SECRET = process.env.ADMIN_SECRET_KEY || "omeglo123";
+
+// Helper: Check Admin Auth
+function checkAdminAuth(req, res, next) {
+  const auth = req.headers["authorization"] || "";
+  const customKey = req.headers["x-admin-key"] || "";
+  const token = auth.replace("Bearer ", "").trim() || customKey || req.query.key;
+
+  if (token === ADMIN_SECRET) {
+    return next();
+  }
+  return res.status(401).json({ success: false, error: "Unauthorized" });
+}
+
+// 1. Admin Overview
+app.get("/api/admin/overview", checkAdminAuth, async (req, res) => {
+  try {
+    const repCount = await d1.executeD1Query("SELECT COUNT(*) as c FROM reports");
+    const guarCount = await d1.executeD1Query("SELECT COUNT(*) as c FROM user_reputation WHERE is_quarantined = 1 AND quarantined_until > datetime('now')");
+    const banCount = await d1.executeD1Query("SELECT COUNT(*) as c FROM banned_users WHERE expires_at IS NULL OR expires_at > datetime('now')");
+    const todayCount = await d1.executeD1Query("SELECT COUNT(*) as c FROM reports WHERE created_at >= date('now')");
+
+    res.json({
+      success: true,
+      overview: {
+        totalReports: repCount?.[0]?.results?.[0]?.c || 0,
+        activeQuarantined: guarCount?.[0]?.results?.[0]?.c || 0,
+        totalBanned: banCount?.[0]?.results?.[0]?.c || 0,
+        todayReports: todayCount?.[0]?.results?.[0]?.c || 0,
+        liveSockets: io.engine.clientsCount || 0,
+        activeMatches: activePairs.size / 2,
+        cleanVideoQueue: cleanVideoQueue.length,
+        cleanTextQueue: cleanTextQueue.length,
+        quarantinedVideoQueue: quarantinedVideoQueue.length,
+        quarantinedTextQueue: quarantinedTextQueue.length,
+      },
+    });
+  } catch (err) {
+    res.json({
+      success: true,
+      overview: {
+        totalReports: 0,
+        activeQuarantined: 0,
+        totalBanned: 0,
+        todayReports: 0,
+        liveSockets: io.engine.clientsCount || 0,
+        activeMatches: activePairs.size / 2,
+        cleanVideoQueue: cleanVideoQueue.length,
+        cleanTextQueue: cleanTextQueue.length,
+        quarantinedVideoQueue: quarantinedVideoQueue.length,
+        quarantinedTextQueue: quarantinedTextQueue.length,
+      },
+    });
+  }
+});
+
+// 2. Admin Reports Feed
+app.get("/api/admin/reports", checkAdminAuth, async (req, res) => {
+  try {
+    const data = await d1.executeD1Query("SELECT * FROM reports ORDER BY created_at DESC LIMIT 100");
+    res.json({ success: true, reports: data?.[0]?.results || [] });
+  } catch (err) {
+    res.json({ success: true, reports: [] });
+  }
+});
+
+// 3. Admin Quarantine Pool
+app.get("/api/admin/quarantine", checkAdminAuth, async (req, res) => {
+  try {
+    const data = await d1.executeD1Query("SELECT * FROM user_reputation WHERE is_quarantined = 1 AND quarantined_until > datetime('now') ORDER BY last_reported_at DESC LIMIT 100");
+    res.json({ success: true, quarantinedUsers: data?.[0]?.results || [] });
+  } catch (err) {
+    res.json({ success: true, quarantinedUsers: [] });
+  }
+});
+
+// 4. Admin Permanent Bans
+app.get("/api/admin/bans", checkAdminAuth, async (req, res) => {
+  try {
+    const data = await d1.executeD1Query("SELECT * FROM banned_users ORDER BY banned_at DESC LIMIT 100");
+    res.json({ success: true, bans: data?.[0]?.results || [] });
+  } catch (err) {
+    res.json({ success: true, bans: [] });
+  }
+});
+
+// 5. Admin Unban
+app.post("/api/admin/unban", checkAdminAuth, async (req, res) => {
+  try {
+    const { identifier } = req.body;
+    if (identifier) {
+      await d1.executeD1Query("UPDATE user_reputation SET is_quarantined = 0, quarantined_until = NULL, report_count = 0 WHERE identifier = ?", [identifier]);
+      await d1.executeD1Query("DELETE FROM banned_users WHERE identifier = ?", [identifier]);
+    }
+    res.json({ success: true, message: `Identifier ${identifier} released to Clean Pool.` });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 6. Admin Hard Ban
+app.post("/api/admin/ban", checkAdminAuth, async (req, res) => {
+  try {
+    const { identifier, identifierType = "device_id", reason = "Admin Ban", durationHours } = req.body;
+    const expiresQuery = durationHours ? `datetime('now', '+${Number(durationHours)} hours')` : "NULL";
+    await d1.executeD1Query(
+      `INSERT INTO banned_users (id, identifier, identifier_type, reason, banned_at, expires_at)
+       VALUES (?, ?, ?, ?, datetime('now'), ${expiresQuery})
+       ON CONFLICT(identifier) DO UPDATE SET reason = excluded.reason, banned_at = datetime('now'), expires_at = excluded.expires_at`,
+      ["ban_" + Date.now(), identifier, identifierType, reason]
+    );
+    res.json({ success: true, message: `Identifier ${identifier} hard banned.` });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 7. Dismiss Report
+app.post("/api/admin/dismiss-report", checkAdminAuth, async (req, res) => {
+  try {
+    const { reportId } = req.body;
+    if (reportId) {
+      await d1.executeD1Query("UPDATE reports SET status = 'dismissed' WHERE id = ?", [reportId]);
+    }
+    res.json({ success: true, message: "Report dismissed." });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 8. Cleanup
+app.post("/api/admin/cleanup", checkAdminAuth, async (req, res) => {
+  try {
+    const days = req.body.days || 90;
+    const del = await d1.executeD1Query(`DELETE FROM reports WHERE created_at < datetime('now', '-${days} days')`);
+    res.json({ success: true, message: `Cleanup completed for records older than ${days} days.` });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
 
 // 1. CLEAN Matchmaking Queues (Standard well-behaved users)
 const cleanVideoQueue = [];

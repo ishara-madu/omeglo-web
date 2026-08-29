@@ -49,7 +49,296 @@ export class Matchmaker {
       });
     }
 
-    // 2. HTTP Health check & status endpoint
+    // CORS Preflight
+    if (request.method === "OPTIONS") {
+      return new Response(null, {
+        status: 204,
+        headers: {
+          "Access-Control-Allow-Origin": "*",
+          "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+          "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Admin-Key",
+        },
+      });
+    }
+
+    const corsHeaders = {
+      "Content-Type": "application/json",
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Admin-Key",
+    };
+
+    // Helper: Check Admin Authentication (Passcode/Token)
+    const authHeader = request.headers.get("Authorization") || "";
+    const customKeyHeader = request.headers.get("X-Admin-Key") || "";
+    const adminKey = this.env.ADMIN_SECRET_KEY || "omeglo123";
+
+    const isAuthorized =
+      authHeader === `Bearer ${adminKey}` ||
+      customKeyHeader === adminKey ||
+      url.searchParams.get("key") === adminKey;
+
+    // ==========================================
+    // Admin API Routes
+    // ==========================================
+    if (url.pathname.startsWith("/api/admin/")) {
+      if (!isAuthorized) {
+        return new Response(
+          JSON.stringify({ success: false, error: "Unauthorized: Invalid or missing Admin Passcode." }),
+          { status: 401, headers: corsHeaders }
+        );
+      }
+
+      // 1. Admin Overview & Live Metrics
+      if (url.pathname === "/api/admin/overview") {
+        let totalReports = 0;
+        let activeQuarantined = 0;
+        let totalBanned = 0;
+        let todayReports = 0;
+
+        if (this.env.DB) {
+          try {
+            const repCount = await this.env.DB.prepare("SELECT COUNT(*) as c FROM reports").first();
+            totalReports = repCount?.c || 0;
+
+            const guarCount = await this.env.DB.prepare(
+              "SELECT COUNT(*) as c FROM user_reputation WHERE is_quarantined = 1 AND quarantined_until > datetime('now')"
+            ).first();
+            activeQuarantined = guarCount?.c || 0;
+
+            const banCount = await this.env.DB.prepare(
+              "SELECT COUNT(*) as c FROM banned_users WHERE expires_at IS NULL OR expires_at > datetime('now')"
+            ).first();
+            totalBanned = banCount?.c || 0;
+
+            const todayCount = await this.env.DB.prepare(
+              "SELECT COUNT(*) as c FROM reports WHERE created_at >= date('now')"
+            ).first();
+            todayReports = todayCount?.c || 0;
+          } catch (err) {
+            console.error("Overview metrics error:", err);
+          }
+        }
+
+        return new Response(
+          JSON.stringify({
+            success: true,
+            overview: {
+              totalReports,
+              activeQuarantined,
+              totalBanned,
+              todayReports,
+              liveSockets: this.sockets.size,
+              activeMatches: this.activePairs.size / 2,
+              cleanVideoQueue: this.cleanVideoQueue.length,
+              cleanTextQueue: this.cleanTextQueue.length,
+              quarantinedVideoQueue: this.quarantinedVideoQueue.length,
+              quarantinedTextQueue: this.quarantinedTextQueue.length,
+            },
+          }),
+          { headers: corsHeaders }
+        );
+      }
+
+      // 2. Admin Reports Feed
+      if (url.pathname === "/api/admin/reports") {
+        let reports = [];
+        if (this.env.DB) {
+          try {
+            const res = await this.env.DB.prepare(
+              "SELECT * FROM reports ORDER BY created_at DESC LIMIT 100"
+            ).all();
+            reports = res.results || [];
+          } catch (err) {
+            console.error("Fetch reports error:", err);
+          }
+        }
+        return new Response(JSON.stringify({ success: true, reports }), { headers: corsHeaders });
+      }
+
+      // 3. Admin Quarantine Pool
+      if (url.pathname === "/api/admin/quarantine") {
+        let quarantinedUsers = [];
+        if (this.env.DB) {
+          try {
+            const res = await this.env.DB.prepare(
+              "SELECT * FROM user_reputation WHERE is_quarantined = 1 AND quarantined_until > datetime('now') ORDER BY last_reported_at DESC LIMIT 100"
+            ).all();
+            quarantinedUsers = res.results || [];
+          } catch (err) {
+            console.error("Fetch quarantine error:", err);
+          }
+        }
+        return new Response(JSON.stringify({ success: true, quarantinedUsers }), { headers: corsHeaders });
+      }
+
+      // 4. Admin Permanent Bans
+      if (url.pathname === "/api/admin/bans") {
+        let bans = [];
+        if (this.env.DB) {
+          try {
+            const res = await this.env.DB.prepare(
+              "SELECT * FROM banned_users ORDER BY banned_at DESC LIMIT 100"
+            ).all();
+            bans = res.results || [];
+          } catch (err) {
+            console.error("Fetch bans error:", err);
+          }
+        }
+        return new Response(JSON.stringify({ success: true, bans }), { headers: corsHeaders });
+      }
+
+      // 5. Action: Release / Unban User (Reset reputation to clean pool)
+      if (url.pathname === "/api/admin/unban" && request.method === "POST") {
+        try {
+          const body = await request.json();
+          const identifier = body?.identifier;
+          if (!identifier) {
+            return new Response(JSON.stringify({ success: false, error: "Identifier is required" }), {
+              status: 400,
+              headers: corsHeaders,
+            });
+          }
+
+          if (this.env.DB) {
+            await this.env.DB.prepare(
+              "UPDATE user_reputation SET is_quarantined = 0, quarantined_until = NULL, report_count = 0 WHERE identifier = ?"
+            )
+              .bind(identifier)
+              .run();
+
+            await this.env.DB.prepare("DELETE FROM banned_users WHERE identifier = ?")
+              .bind(identifier)
+              .run();
+          }
+
+          return new Response(
+            JSON.stringify({ success: true, message: `Identifier ${identifier} successfully released to Clean Pool.` }),
+            { headers: corsHeaders }
+          );
+        } catch (err) {
+          return new Response(JSON.stringify({ success: false, error: err.message }), {
+            status: 500,
+            headers: corsHeaders,
+          });
+        }
+      }
+
+      // 6. Action: Add Permanent / Long-term Hard Ban
+      if (url.pathname === "/api/admin/ban" && request.method === "POST") {
+        try {
+          const body = await request.json();
+          const { identifier, identifierType = "device_id", reason = "Admin Manual Ban", durationHours = null } = body || {};
+
+          if (!identifier) {
+            return new Response(JSON.stringify({ success: false, error: "Identifier is required" }), {
+              status: 400,
+              headers: corsHeaders,
+            });
+          }
+
+          if (this.env.DB) {
+            const banId = "ban_" + crypto.randomUUID();
+            const expiresQuery = durationHours
+              ? `datetime('now', '+${Number(durationHours)} hours')`
+              : "NULL";
+
+            await this.env.DB.prepare(
+              `INSERT INTO banned_users (id, identifier, identifier_type, reason, banned_at, expires_at)
+               VALUES (?, ?, ?, ?, datetime('now'), ${expiresQuery})
+               ON CONFLICT(identifier) DO UPDATE SET
+                 reason = excluded.reason,
+                 banned_at = datetime('now'),
+                 expires_at = excluded.expires_at`
+            )
+              .bind(banId, identifier, identifierType, reason)
+              .run();
+
+            // Also lock in reputation table
+            await this.env.DB.prepare(
+              `INSERT INTO user_reputation (id, identifier, identifier_type, report_count, is_quarantined, quarantined_until, last_reported_at, created_at)
+               VALUES (?, ?, ?, 5, 1, datetime('now', '+30 days'), datetime('now'), datetime('now'))
+               ON CONFLICT(identifier) DO UPDATE SET
+                 report_count = report_count + 1,
+                 is_quarantined = 1,
+                 quarantined_until = datetime('now', '+30 days'),
+                 last_reported_at = datetime('now')`
+            )
+              .bind("rep_" + crypto.randomUUID(), identifier, identifierType)
+              .run();
+          }
+
+          return new Response(
+            JSON.stringify({ success: true, message: `Identifier ${identifier} has been hard banned.` }),
+            { headers: corsHeaders }
+          );
+        } catch (err) {
+          return new Response(JSON.stringify({ success: false, error: err.message }), {
+            status: 500,
+            headers: corsHeaders,
+          });
+        }
+      }
+
+      // 7. Action: Dismiss a false report
+      if (url.pathname === "/api/admin/dismiss-report" && request.method === "POST") {
+        try {
+          const body = await request.json();
+          const reportId = body?.reportId;
+          if (this.env.DB && reportId) {
+            await this.env.DB.prepare("UPDATE reports SET status = 'dismissed' WHERE id = ?")
+              .bind(reportId)
+              .run();
+          }
+          return new Response(JSON.stringify({ success: true, message: "Report dismissed." }), {
+            headers: corsHeaders,
+          });
+        } catch (err) {
+          return new Response(JSON.stringify({ success: false, error: err.message }), {
+            status: 500,
+            headers: corsHeaders,
+          });
+        }
+      }
+
+      // 8. Action: Manual 90-Day Cleanup Trigger
+      if (url.pathname === "/api/admin/cleanup" && request.method === "POST") {
+        try {
+          const body = await request.json();
+          const days = body?.days || 90;
+          let deletedReports = 0;
+          let deletedReputations = 0;
+
+          if (this.env.DB) {
+            const delRep = await this.env.DB.prepare(
+              `DELETE FROM reports WHERE created_at < datetime('now', '-${days} days')`
+            ).run();
+            deletedReports = delRep.meta?.changes || 0;
+
+            const delUser = await this.env.DB.prepare(
+              `DELETE FROM user_reputation 
+               WHERE last_reported_at < datetime('now', '-${days} days')
+                 AND (quarantined_until IS NULL OR quarantined_until < datetime('now'))`
+            ).run();
+            deletedReputations = delUser.meta?.changes || 0;
+          }
+
+          return new Response(
+            JSON.stringify({
+              success: true,
+              message: `Cleaned up ${deletedReports} reports and ${deletedReputations} inactive reputation records older than ${days} days.`,
+            }),
+            { headers: corsHeaders }
+          );
+        } catch (err) {
+          return new Response(JSON.stringify({ success: false, error: err.message }), {
+            status: 500,
+            headers: corsHeaders,
+          });
+        }
+      }
+    }
+
+    // 3. HTTP Health check & status endpoint
     if (url.pathname === "/" || url.pathname === "/health") {
       return new Response(
         JSON.stringify(
@@ -66,16 +355,11 @@ export class Matchmaker {
           null,
           2
         ),
-        {
-          headers: {
-            "Content-Type": "application/json",
-            "Access-Control-Allow-Origin": "*",
-          },
-        }
+        { headers: corsHeaders }
       );
     }
 
-    return new Response("Not Found", { status: 404 });
+    return new Response("Not Found", { status: 404, headers: corsHeaders });
   }
 
   async handleWebSocket(ws, clientIp) {
