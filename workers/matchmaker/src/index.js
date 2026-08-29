@@ -270,6 +270,9 @@ export class Matchmaker {
 
       // 1.5 Admin Traffic & Duration Analytics (Aggregated 1D, 7D, 28D, 90D with Mode Filter)
       if (url.pathname === "/api/admin/analytics") {
+        // Flush any pending in-memory buffer to D1 before fetching
+        await this.flushAnalytics();
+
         const range = url.searchParams.get("range") || "7d";
         const selectedMode = url.searchParams.get("mode") || "all"; // 'all', 'video', 'text'
         const days = range === "1d" ? 1 : range === "28d" ? 28 : range === "90d" ? 90 : 7;
