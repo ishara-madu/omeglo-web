@@ -2021,11 +2021,11 @@ export default function Home() {
 
       {/* Top Header */}
       <header className="w-full bg-white/95 backdrop-blur-md border-b border-zinc-200/70 sticky top-0 z-30">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-15 flex items-center justify-between gap-2">
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 h-14 sm:h-15 flex items-center justify-between gap-1.5 sm:gap-4">
           {/* Brand Logo & Multicolor Wordmark */}
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
             {/* Minimalist Logo Icon */}
-            <div className="w-9 h-9 flex items-center justify-center transition-transform hover:scale-105">
+            <div className="w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center transition-transform hover:scale-105 shrink-0">
               <Image
                 src="/logo.webp"
                 alt="Omeglo Logo Mark"
@@ -2039,57 +2039,63 @@ export default function Home() {
             {/* Eye-Friendly Multicolor Typography */}
             <div className="flex flex-col">
               <div className="flex items-center gap-1.5 leading-none">
-                <OmegloWordmark size="text-[19px]" />
+                <OmegloWordmark size="text-[17px] sm:text-[19px]" />
               </div>
-              <span className="text-[10px] text-zinc-400 font-medium tracking-wide leading-none mt-0.5">
+              <span className="text-[10px] text-zinc-400 font-medium tracking-wide leading-none mt-0.5 hidden sm:block">
                 {chatMode === "video" ? "Random Video Chat" : "Random Text Chat"}
               </span>
             </div>
           </div>
 
           {/* Central Segmented Chat Mode Switcher (Video vs Text) */}
-          <div className="flex items-center bg-zinc-100/90 p-1 rounded-xl border border-zinc-200/60 shadow-2xs">
+          <div className="flex items-center bg-zinc-100/90 p-0.5 sm:p-1 rounded-xl border border-zinc-200/60 shadow-2xs shrink-0">
             <button
               type="button"
               onClick={() => handleModeChange("video")}
-              className={`h-8 px-3 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all duration-150 cursor-pointer ${chatMode === "video"
-                ? "bg-white text-zinc-950 shadow-2xs font-semibold ring-1 ring-zinc-200/80"
-                : "text-zinc-500 hover:text-zinc-900 hover:bg-white/50"
-                }`}
+              className={`h-7 sm:h-8 px-2 sm:px-3 rounded-lg text-[11px] sm:text-xs font-medium flex items-center gap-1 sm:gap-1.5 transition-all duration-150 cursor-pointer ${
+                chatMode === "video"
+                  ? "bg-white text-zinc-950 shadow-2xs font-semibold ring-1 ring-zinc-200/80"
+                  : "text-zinc-500 hover:text-zinc-900 hover:bg-white/50"
+              }`}
             >
-              <Video className="w-3.5 h-3.5" />
-              <span>Video Chat</span>
+              <Video className="w-3.5 h-3.5 shrink-0" />
+              <span>Video</span>
+              <span className="hidden sm:inline">Chat</span>
             </button>
             <button
               type="button"
               onClick={() => handleModeChange("text")}
-              className={`h-8 px-3 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all duration-150 cursor-pointer ${chatMode === "text"
-                ? "bg-white text-zinc-950 shadow-2xs font-semibold ring-1 ring-zinc-200/80"
-                : "text-zinc-500 hover:text-zinc-900 hover:bg-white/50"
-                }`}
+              className={`h-7 sm:h-8 px-2 sm:px-3 rounded-lg text-[11px] sm:text-xs font-medium flex items-center gap-1 sm:gap-1.5 transition-all duration-150 cursor-pointer ${
+                chatMode === "text"
+                  ? "bg-white text-zinc-950 shadow-2xs font-semibold ring-1 ring-zinc-200/80"
+                  : "text-zinc-500 hover:text-zinc-900 hover:bg-white/50"
+              }`}
             >
-              <MessageSquare className="w-3.5 h-3.5" />
-              <span>Text Only</span>
+              <MessageSquare className="w-3.5 h-3.5 shrink-0" />
+              <span>Text</span>
+              <span className="hidden sm:inline">Only</span>
             </button>
           </div>
 
           {/* User Gender Tag & Live Online Badges */}
-          <div className="flex items-center gap-2.5 sm:gap-4 text-xs">
+          <div className="flex items-center gap-1.5 sm:gap-3 text-xs shrink-0">
             {/* Real-time Network Signal Health Indicator */}
             {chatMode === "video" && (
               <div
-                title={`Network Signal: ${networkQuality === "good"
-                  ? "Strong (Smooth HD)"
-                  : networkQuality === "fair"
+                title={`Network Signal: ${
+                  networkQuality === "good"
+                    ? "Strong (Smooth HD)"
+                    : networkQuality === "fair"
                     ? "Fair (Low Bandwidth - optimized)"
                     : "Critical / Weak Signal"
-                  }`}
-                className={`flex items-center gap-1.5 px-2 py-1 rounded-full border transition-colors ${networkQuality === "good"
-                  ? "bg-emerald-50/80 border-emerald-200/60 text-emerald-700"
-                  : networkQuality === "fair"
+                }`}
+                className={`hidden md:flex items-center gap-1.5 px-2 py-1 rounded-full border transition-colors ${
+                  networkQuality === "good"
+                    ? "bg-emerald-50/80 border-emerald-200/60 text-emerald-700"
+                    : networkQuality === "fair"
                     ? "bg-amber-50/80 border-amber-200/60 text-amber-700"
                     : "bg-red-50/80 border-red-200/60 text-red-700 animate-pulse"
-                  }`}
+                }`}
               >
                 {networkQuality === "good" ? (
                   <Signal className="w-3.5 h-3.5" />
@@ -2098,8 +2104,8 @@ export default function Home() {
                 ) : (
                   <SignalLow className="w-3.5 h-3.5" />
                 )}
-                <span className="text-[10px] font-semibold hidden md:inline capitalize">
-                  {networkQuality === "good" ? "Fast Signal" : networkQuality === "fair" ? "Low Signal" : "No Signal"}
+                <span className="text-[10px] font-semibold capitalize">
+                  {networkQuality === "good" ? "Fast" : networkQuality === "fair" ? "Low" : "No Signal"}
                 </span>
               </div>
             )}
@@ -2112,9 +2118,9 @@ export default function Home() {
                   setShowGenderModal(true);
                 }}
                 title="Click to change your gender"
-                className="flex items-center gap-2 px-2.5 py-1 rounded-full bg-zinc-100/90 hover:bg-zinc-200/80 text-zinc-800 border border-zinc-200/60 transition-colors cursor-pointer"
+                className="flex items-center gap-1 sm:gap-2 px-2 sm:px-2.5 py-1 rounded-full bg-zinc-100/90 hover:bg-zinc-200/80 text-zinc-800 border border-zinc-200/60 transition-colors cursor-pointer"
               >
-                <div className="w-4 h-4 rounded-full overflow-hidden flex items-center justify-center">
+                <div className="w-3.5 h-3.5 sm:w-4 sm:h-4 rounded-full overflow-hidden flex items-center justify-center shrink-0">
                   <Image
                     src={userGender === "male" ? "/male.svg" : "/female.svg"}
                     alt={userGender}
@@ -2123,23 +2129,23 @@ export default function Home() {
                     className="w-full h-full object-contain"
                   />
                 </div>
-                <span className="capitalize font-medium text-[11px]">{userGender}</span>
-                <Edit2 className="w-2.5 h-2.5 text-zinc-400 ml-0.5" />
+                <span className="capitalize font-medium text-[10px] sm:text-[11px]">{userGender}</span>
+                <Edit2 className="w-2.5 h-2.5 text-zinc-400 ml-0.5 hidden sm:inline" />
               </button>
             )}
 
             {/* Real-time Online Counter from Socket Server */}
-            <div className="flex items-center gap-2 px-2.5 py-1 rounded-full bg-zinc-100/90 text-zinc-700 border border-zinc-200/50">
-              <span className="relative flex h-1.5 w-1.5">
+            <div className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-2.5 py-1 rounded-full bg-zinc-100/90 text-zinc-700 border border-zinc-200/50">
+              <span className="relative flex h-1.5 w-1.5 shrink-0">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                 <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
               </span>
-              <Users className="w-3 h-3 text-zinc-500" />
-              <span className="font-medium">{onlineCount}</span>
-              <span className="text-zinc-400 hidden sm:inline">online</span>
+              <Users className="w-3 h-3 text-zinc-500 shrink-0" />
+              <span className="font-bold text-[11px] sm:text-xs">{onlineCount}</span>
+              <span className="text-zinc-400 hidden sm:inline text-[11px]">online</span>
             </div>
 
-            <div className="hidden md:flex items-center gap-1.5 text-zinc-400">
+            <div className="hidden lg:flex items-center gap-1.5 text-zinc-400">
               <Shield className="w-3.5 h-3.5" />
               <span>P2P Encrypted</span>
             </div>
@@ -2500,9 +2506,9 @@ export default function Home() {
           </div>
 
           {/* ULTRA-SLEEK MINIMALIST CONTROL DOCK */}
-          <div className="bg-white border border-zinc-200/80 rounded-2xl p-2 sm:p-2.5 flex flex-wrap items-center justify-between gap-2.5 sm:gap-3 shadow-xs">
+          <div className="bg-white border border-zinc-200/80 rounded-2xl p-2 sm:p-2.5 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 sm:gap-3 shadow-xs">
             {/* Left/Main Action Controls */}
-            <div className="flex items-center gap-2 flex-1 sm:flex-none">
+            <div className="flex items-center gap-2 w-full sm:w-auto">
               {status === "idle" ? (
                 /* Sleek Start Button */
                 <button
@@ -2517,16 +2523,17 @@ export default function Home() {
                 </button>
               ) : (
                 /* Connected / Searching / Disconnected Actions */
-                <div className="flex items-center gap-2 w-full sm:w-auto">
+                <div className="flex items-center gap-1.5 sm:gap-2 w-full sm:w-auto">
                   {/* Stop / Leave Button */}
                   <button
                     onClick={handleStop}
                     disabled={status === "disconnected"}
                     title="Stop / Disconnect"
-                    className={`h-11 px-4 sm:px-5 rounded-xl text-sm font-medium transition-all duration-150 flex items-center justify-center gap-2 cursor-pointer ${status === "disconnected"
-                      ? "bg-zinc-100 text-zinc-300 border border-zinc-200/50 cursor-not-allowed"
-                      : "bg-zinc-100 hover:bg-red-50 hover:text-red-600 text-zinc-700 border border-zinc-200/70 active:scale-[0.98]"
-                      }`}
+                    className={`h-11 px-3.5 sm:px-5 rounded-xl text-sm font-medium transition-all duration-150 flex items-center justify-center gap-1.5 sm:gap-2 cursor-pointer shrink-0 ${
+                      status === "disconnected"
+                        ? "bg-zinc-100 text-zinc-300 border border-zinc-200/50 cursor-not-allowed"
+                        : "bg-zinc-100 hover:bg-red-50 hover:text-red-600 text-zinc-700 border border-zinc-200/70 active:scale-[0.98]"
+                    }`}
                   >
                     <Square className="w-3.5 h-3.5" />
                     <span>Stop</span>
@@ -2538,7 +2545,7 @@ export default function Home() {
                       type="button"
                       onClick={handleOpenReportModal}
                       title="Report Stranger"
-                      className="h-11 px-3 sm:px-3.5 rounded-xl text-xs font-semibold bg-red-50/80 hover:bg-red-100/90 text-red-600 border border-red-200/70 active:scale-[0.98] transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs"
+                      className="h-11 px-3 sm:px-3.5 rounded-xl text-xs font-semibold bg-red-50/80 hover:bg-red-100/90 text-red-600 border border-red-200/70 active:scale-[0.98] transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs shrink-0"
                     >
                       <Flag className="w-3.5 h-3.5 fill-red-500/20" />
                       <span className="hidden sm:inline">Report</span>
@@ -2550,7 +2557,7 @@ export default function Home() {
                     onClick={handleNext}
                     disabled={status === "searching" || isNextDisabled}
                     title={status === "searching" ? "Finding next stranger..." : "Next Stranger (Esc)"}
-                    className={`flex-1 sm:flex-none h-11 px-6 rounded-xl text-sm font-medium transition-all duration-150 flex items-center justify-center gap-2 shadow-xs ${
+                    className={`flex-1 sm:flex-none h-11 px-4 sm:px-6 rounded-xl text-sm font-medium transition-all duration-150 flex items-center justify-center gap-2 shadow-xs ${
                       status === "searching" || isNextDisabled
                         ? "bg-zinc-800 text-zinc-400 opacity-60 cursor-not-allowed"
                         : "bg-zinc-950 hover:bg-zinc-800 active:scale-[0.98] text-white cursor-pointer"
@@ -2576,7 +2583,7 @@ export default function Home() {
             </div>
 
             {/* Middle: Gender Match Preference Selector (Using Custom Symbol SVGs) */}
-            <div className="flex items-center gap-1 bg-zinc-100/90 p-1 rounded-xl border border-zinc-200/60">
+            <div className="flex items-center justify-center gap-1 bg-zinc-100/90 p-1 rounded-xl border border-zinc-200/60 w-full sm:w-auto">
               <span className="text-[10px] text-zinc-400 font-medium px-1.5 hidden md:inline">
                 Looking for:
               </span>
@@ -2586,12 +2593,13 @@ export default function Home() {
                 type="button"
                 onClick={() => handleMatchPreferenceChange("any")}
                 title="Match with anyone"
-                className={`h-9 px-2.5 sm:px-3 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all duration-150 cursor-pointer ${matchPreference === "any"
-                  ? "bg-white text-zinc-950 shadow-2xs font-semibold ring-1 ring-zinc-200/80"
-                  : "text-zinc-500 hover:text-zinc-900 hover:bg-white/50"
-                  }`}
+                className={`flex-1 sm:flex-none h-9 px-2.5 sm:px-3 rounded-lg text-xs font-medium flex items-center justify-center gap-1.5 transition-all duration-150 cursor-pointer ${
+                  matchPreference === "any"
+                    ? "bg-white text-zinc-950 shadow-2xs font-semibold ring-1 ring-zinc-200/80"
+                    : "text-zinc-500 hover:text-zinc-900 hover:bg-white/50"
+                }`}
               >
-                <div className="w-4 h-4 rounded-full flex items-center justify-center">
+                <div className="w-4 h-4 rounded-full flex items-center justify-center shrink-0">
                   <Image
                     src="/gender-both.svg"
                     alt="Both"
@@ -2608,12 +2616,13 @@ export default function Home() {
                 type="button"
                 onClick={() => handleMatchPreferenceChange("female")}
                 title="Filter for female strangers"
-                className={`h-9 px-2.5 sm:px-3 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all duration-150 cursor-pointer ${matchPreference === "female"
-                  ? "bg-white text-zinc-950 shadow-2xs font-semibold ring-1 ring-zinc-200/80"
-                  : "text-zinc-500 hover:text-zinc-900 hover:bg-white/50"
-                  }`}
+                className={`flex-1 sm:flex-none h-9 px-2.5 sm:px-3 rounded-lg text-xs font-medium flex items-center justify-center gap-1.5 transition-all duration-150 cursor-pointer ${
+                  matchPreference === "female"
+                    ? "bg-white text-zinc-950 shadow-2xs font-semibold ring-1 ring-zinc-200/80"
+                    : "text-zinc-500 hover:text-zinc-900 hover:bg-white/50"
+                }`}
               >
-                <div className="w-4 h-4 rounded-full flex items-center justify-center">
+                <div className="w-4 h-4 rounded-full flex items-center justify-center shrink-0">
                   <Image
                     src="/gender-female.svg"
                     alt="Female Symbol"
@@ -2630,12 +2639,13 @@ export default function Home() {
                 type="button"
                 onClick={() => handleMatchPreferenceChange("male")}
                 title="Filter for male strangers"
-                className={`h-9 px-2.5 sm:px-3 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all duration-150 cursor-pointer ${matchPreference === "male"
-                  ? "bg-white text-zinc-950 shadow-2xs font-semibold ring-1 ring-zinc-200/80"
-                  : "text-zinc-500 hover:text-zinc-900 hover:bg-white/50"
-                  }`}
+                className={`flex-1 sm:flex-none h-9 px-2.5 sm:px-3 rounded-lg text-xs font-medium flex items-center justify-center gap-1.5 transition-all duration-150 cursor-pointer ${
+                  matchPreference === "male"
+                    ? "bg-white text-zinc-950 shadow-2xs font-semibold ring-1 ring-zinc-200/80"
+                    : "text-zinc-500 hover:text-zinc-900 hover:bg-white/50"
+                }`}
               >
-                <div className="w-4 h-4 rounded-full flex items-center justify-center">
+                <div className="w-4 h-4 rounded-full flex items-center justify-center shrink-0">
                   <Image
                     src="/gender-male.svg"
                     alt="Male Symbol"
