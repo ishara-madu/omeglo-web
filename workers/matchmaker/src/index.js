@@ -22,8 +22,9 @@ export class Matchmaker {
     // peerSessions: Map<peerId, { socketId, ip, fingerprint, gender, mode, isQuarantined }>
     this.peerSessions = new Map();
 
-    // Sockets Map
+    // Sockets & Geo Map
     this.sockets = new Map();
+    this.socketGeo = new Map();
   }
 
   async fetch(request) {
@@ -40,7 +41,14 @@ export class Matchmaker {
         request.headers.get("x-forwarded-for") ||
         "unknown";
 
-      await this.handleWebSocket(server, clientIp);
+      const geo = {
+        country: request.cf?.country || "LK",
+        city: request.cf?.city || "Colombo",
+        region: request.cf?.region || "",
+        continent: request.cf?.continent || "AS",
+      };
+
+      await this.handleWebSocket(server, clientIp, geo);
 
       return new Response(null, {
         status: 101,
@@ -119,6 +127,45 @@ export class Matchmaker {
           }
         }
 
+        // Aggregate Real-time Live Country Distribution
+        const countryCounts = {};
+        let totalGeoUsers = 0;
+        for (const [sId, g] of this.socketGeo.entries()) {
+          const c = (g.country || "LK").toUpperCase();
+          countryCounts[c] = (countryCounts[c] || 0) + 1;
+          totalGeoUsers++;
+        }
+
+        const countryNames = {
+          LK: "Sri Lanka", US: "United States", IN: "India", GB: "United Kingdom",
+          CA: "Canada", AU: "Australia", DE: "Germany", FR: "France", AE: "UAE",
+          SA: "Saudi Arabia", SG: "Singapore", MY: "Malaysia", IT: "Italy", ES: "Spain",
+          NL: "Netherlands", BR: "Brazil", JP: "Japan", KR: "South Korea", RU: "Russia",
+          PK: "Pakistan", BD: "Bangladesh", QA: "Qatar", KW: "Kuwait", OM: "Oman",
+          ID: "Indonesia", PH: "Philippines", TH: "Thailand", VN: "Vietnam", NZ: "New Zealand"
+        };
+
+        const getFlag = (code) =>
+          code && code.length === 2
+            ? String.fromCodePoint(...[...code.toUpperCase()].map(c => 127397 + c.charCodeAt(0)))
+            : "🌐";
+
+        let geoStats = Object.entries(countryCounts)
+          .map(([code, count]) => ({
+            country: code,
+            name: countryNames[code] || code,
+            flag: getFlag(code),
+            count,
+            percentage: totalGeoUsers > 0 ? Math.round((count / totalGeoUsers) * 100) : 100,
+          }))
+          .sort((a, b) => b.count - a.count);
+
+        if (geoStats.length === 0) {
+          geoStats = [
+            { country: "LK", name: "Sri Lanka", flag: "🇱🇰", count: Math.max(1, this.sockets.size), percentage: 100 }
+          ];
+        }
+
         return new Response(
           JSON.stringify({
             success: true,
@@ -133,6 +180,7 @@ export class Matchmaker {
               cleanTextQueue: this.cleanTextQueue.length,
               quarantinedVideoQueue: this.quarantinedVideoQueue.length,
               quarantinedTextQueue: this.quarantinedTextQueue.length,
+              geoStats,
             },
           }),
           { headers: corsHeaders }
@@ -546,12 +594,19 @@ export class Matchmaker {
     return new Response("Not Found", { status: 404, headers: corsHeaders });
   }
 
-  async handleWebSocket(ws, clientIp) {
+  async handleWebSocket(ws, clientIp, geo = {}) {
     ws.accept();
     const socketId = "sock_" + crypto.randomUUID();
     this.sockets.set(socketId, ws);
+    this.socketGeo.set(socketId, {
+      country: geo.country || "LK",
+      city: geo.city || "Colombo",
+      region: geo.region || "",
+      continent: geo.continent || "AS",
+      connectedAt: Date.now(),
+    });
 
-    console.log(`[+] User connected: ${socketId} (IP: ${clientIp})`);
+    console.log(`[+] User connected: ${socketId} (IP: ${clientIp}, Country: ${geo.country || "LK"})`);
     this.broadcastOnlineCount();
 
     ws.addEventListener("message", async (msg) => {
@@ -579,6 +634,7 @@ export class Matchmaker {
       this.removeFromAllQueues(socketId);
       this.cleanupActivePair(socketId);
       this.sockets.delete(socketId);
+      this.socketGeo.delete(socketId);
       this.userSessions.delete(socketId);
       this.broadcastOnlineCount();
     });

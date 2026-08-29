@@ -28,6 +28,9 @@ import {
   CheckSquare,
   Square,
   Layers,
+  Globe,
+  MapPin,
+  Compass,
 } from "lucide-react";
 
 const BACKEND_URL =
@@ -36,6 +39,14 @@ const BACKEND_URL =
   "https://omeglo-backend.pocoma3486.workers.dev";
 
 type Tab = "overview" | "reports" | "quarantine" | "bans" | "maintenance";
+
+type GeoStatItem = {
+  country: string;
+  name: string;
+  flag: string;
+  count: number;
+  percentage: number;
+};
 
 type OverviewData = {
   totalReports: number;
@@ -48,6 +59,7 @@ type OverviewData = {
   cleanTextQueue: number;
   quarantinedVideoQueue: number;
   quarantinedTextQueue: number;
+  geoStats?: GeoStatItem[];
 };
 
 type ReportItem = {
@@ -803,6 +815,71 @@ export default function AdminPage() {
                   <span className="text-[11px] text-zinc-500 block mb-1">Quarantined Video Queue</span>
                   <span className="text-xl font-bold text-purple-400 font-mono">{overview?.quarantinedVideoQueue ?? 0}</span>
                 </div>
+              </div>
+            </div>
+
+            {/* Live Global Traffic & Heatmap Distribution */}
+            <div className="bg-zinc-900/60 border border-zinc-800/80 rounded-3xl p-6 space-y-5 shadow-xs">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div>
+                  <h2 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                    <Globe className="w-4 h-4 text-cyan-400" />
+                    <span>Live Global Traffic & Country Heatmap</span>
+                  </h2>
+                  <p className="text-xs text-zinc-400 mt-0.5">
+                    Real-time geo-distribution powered by Cloudflare Native Edge Network
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-zinc-950 border border-zinc-800 text-[11px] text-zinc-300 font-mono w-fit">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                  <span>{overview?.liveSockets ?? 0} Global Connections</span>
+                </div>
+              </div>
+
+              {/* Country Distribution Grid & Progress Bars */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 pt-2">
+                {(!overview?.geoStats || overview.geoStats.length === 0) ? (
+                  <div className="col-span-full p-8 text-center text-zinc-500 text-xs bg-zinc-950/60 rounded-2xl border border-zinc-800/60">
+                    Waiting for active user connections to populate global heatmap...
+                  </div>
+                ) : (
+                  overview.geoStats.map((item, idx) => (
+                    <div
+                      key={item.country || idx}
+                      className="bg-zinc-950/90 border border-zinc-800/80 rounded-2xl p-4 space-y-2.5 hover:border-zinc-700 transition-colors"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2.5">
+                          <span className="text-xl select-none" role="img" aria-label={item.name}>
+                            {item.flag}
+                          </span>
+                          <div>
+                            <span className="text-xs font-bold text-white">{item.name}</span>
+                            <span className="text-[10px] text-zinc-500 font-mono ml-2">({item.country})</span>
+                          </div>
+                        </div>
+
+                        <div className="text-right">
+                          <span className="text-xs font-extrabold font-mono text-cyan-300">
+                            {item.count} {item.count === 1 ? "user" : "users"}
+                          </span>
+                          <span className="text-[10px] text-zinc-500 font-mono ml-1.5 font-semibold">
+                            {item.percentage}%
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Animated Gradient Bar */}
+                      <div className="w-full h-2 rounded-full bg-zinc-900 overflow-hidden border border-zinc-800/60">
+                        <div
+                          className="h-full rounded-full bg-gradient-to-r from-cyan-500 to-emerald-400 transition-all duration-500"
+                          style={{ width: `${Math.max(5, item.percentage)}%` }}
+                        />
+                      </div>
+                    </div>
+                  ))
+                )}
               </div>
             </div>
           </div>
