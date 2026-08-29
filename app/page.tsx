@@ -38,6 +38,9 @@ import {
   Flag,
   ShieldAlert,
   RefreshCw,
+  Maximize2,
+  Minimize2,
+  ArrowLeftRight,
 } from "lucide-react";
 import { getBrowserFingerprint } from "@/lib/fingerprint";
 import { filterMessage } from "@/lib/moderation/regexFilter";
@@ -362,9 +365,11 @@ export default function Home() {
   const [isNextDisabled, setIsNextDisabled] = useState(false);
   const nextCooldownRef = useRef<number>(0);
 
-  // Draggable PiP State
+  // Draggable PiP State, Sizing & WhatsApp-Style Feed Swapping
   const [pipPos, setPipPos] = useState<{ x: number; y: number } | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [isSwappedFeeds, setIsSwappedFeeds] = useState<boolean>(false);
+  const [pipSize, setPipSize] = useState<"sm" | "md" | "lg">("md");
 
   // Report Modal & Notification State
   const [showReportModal, setShowReportModal] = useState(false);
@@ -582,7 +587,7 @@ export default function Home() {
         localVideoRef.current.srcObject = null;
       }
     }
-  }, [localStream, chatMode]);
+  }, [localStream, chatMode, isSwappedFeeds]);
 
   // Bind remote stream to remote video element
   useEffect(() => {
@@ -596,7 +601,7 @@ export default function Home() {
         remoteVideoRef.current.srcObject = null;
       }
     }
-  }, [remoteStream, chatMode]);
+  }, [remoteStream, chatMode, isSwappedFeeds]);
 
   // Ultra-Lightweight P2P Micro-Snapshot (16x12 px ~ 200 Bytes) to show instant ambient colors before video frames arrive
   const captureMicroThumbnail = useCallback((): string | null => {
@@ -2194,7 +2199,7 @@ export default function Home() {
             {chatMode === "video" && (
               <>
                 {/* 1. Instant 0ms Fallback: Dummy Blurred Person Silhouette Placeholder (Before Micro-Snapshot arrives) */}
-                {!remoteMicroPreview && !isRemoteVideoPlaying && status === "connected" && (
+                {!isSwappedFeeds && !remoteMicroPreview && !isRemoteVideoPlaying && status === "connected" && (
                   <div className="absolute inset-0 z-0 flex flex-col items-center justify-center overflow-hidden pointer-events-none">
                     {/* Soft ambient background glow */}
                     <div className="absolute inset-0 bg-gradient-to-b from-zinc-900 via-zinc-950 to-black animate-pulse" />
@@ -2213,7 +2218,7 @@ export default function Home() {
                 )}
 
                 {/* 2. Real Micro-Snapshot Preview (16x12 px ambient colors with heavy blur) */}
-                {remoteMicroPreview && !isRemoteVideoPlaying && status === "connected" && (
+                {!isSwappedFeeds && remoteMicroPreview && !isRemoteVideoPlaying && status === "connected" && (
                   <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none animate-in fade-in duration-300">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
@@ -2229,46 +2234,75 @@ export default function Home() {
                   </div>
                 )}
 
-                {/* 3. High-Definition WebRTC Video Feed (Smoothly cross-fades into view with NSFW blur shield) */}
-                <video
-                  ref={remoteVideoRef}
-                  autoPlay
-                  playsInline
-                  onPlaying={() => setIsRemoteVideoPlaying(true)}
-                  onLoadedData={() => setIsRemoteVideoPlaying(true)}
-                  className={`absolute inset-0 w-full h-full object-cover z-0 transition-all duration-500 ${
-                    status === "connected" && remoteStream
-                      ? isNsfwBlurred
-                        ? "opacity-100 filter blur-3xl brightness-50"
-                        : isRemoteVideoPlaying
-                          ? "opacity-100 filter-none"
-                          : "opacity-0 filter blur-xl"
-                      : "opacity-0 hidden"
-                  }`}
-                />
+                {/* 3. Main Stage Feed (Stranger when normal, Your camera when swapped) */}
+                {!isSwappedFeeds ? (
+                  <video
+                    ref={remoteVideoRef}
+                    autoPlay
+                    playsInline
+                    onPlaying={() => setIsRemoteVideoPlaying(true)}
+                    onLoadedData={() => setIsRemoteVideoPlaying(true)}
+                    className={`absolute inset-0 w-full h-full object-cover z-0 transition-all duration-500 ${
+                      status === "connected" && remoteStream
+                        ? isNsfwBlurred
+                          ? "opacity-100 filter blur-3xl brightness-50"
+                          : isRemoteVideoPlaying
+                            ? "opacity-100 filter-none"
+                            : "opacity-0 filter blur-xl"
+                        : "opacity-0 hidden"
+                    }`}
+                  />
+                ) : (
+                  <video
+                    ref={localVideoRef}
+                    autoPlay
+                    playsInline
+                    muted
+                    className={`absolute inset-0 w-full h-full object-cover z-0 ${
+                      facingMode === "user" ? "scale-x-[-1]" : ""
+                    } transition-opacity duration-300 ${
+                      !localStream || hasCameraPermission === false ? "opacity-0" : "opacity-100"
+                    }`}
+                  />
+                )}
               </>
             )}
 
-            {/* Stranger Badge (Top Left) */}
+            {/* Stage Identity Badge (Top Left) */}
             <div className="absolute top-4 left-4 z-10 flex items-center gap-2 bg-black/60 backdrop-blur-md px-3 py-1 rounded-full border border-white/10 text-white text-xs font-medium pointer-events-none">
               <span
-                className={`w-2 h-2 rounded-full transition-colors duration-300 ${status === "connected"
-                  ? "bg-emerald-500"
-                  : status === "searching"
+                className={`w-2 h-2 rounded-full transition-colors duration-300 ${
+                  status === "connected"
+                    ? "bg-emerald-500"
+                    : status === "searching"
                     ? "bg-amber-400 animate-pulse"
                     : "bg-zinc-600"
-                  }`}
+                }`}
               />
               <span className="text-[11px] font-medium tracking-tight">
-                {status === "connected" && strangerGender
+                {isSwappedFeeds
+                  ? "You (Full Camera View)"
+                  : status === "connected" && strangerGender
                   ? `Stranger (${strangerGender === "female" ? "Female" : "Male"})`
                   : `Stranger (${chatMode === "text" ? "Text Mode" : "Video Mode"})`}
               </span>
             </div>
 
-            {/* Quality & Report Badges (Top Right) */}
+            {/* Quality, Report & Swap Back Badges (Top Right) */}
             {status === "connected" && (
               <div className="absolute top-4 right-4 z-10 flex items-center gap-1.5">
+                {isSwappedFeeds && (
+                  <button
+                    type="button"
+                    onClick={() => setIsSwappedFeeds(false)}
+                    title="Switch main view back to stranger"
+                    className="bg-black/60 hover:bg-white/20 backdrop-blur-md text-zinc-300 hover:text-white px-2.5 py-1 rounded-full border border-white/10 text-[11px] font-medium flex items-center gap-1 transition-all cursor-pointer shadow-sm active:scale-95"
+                  >
+                    <ArrowLeftRight className="w-3 h-3 text-cyan-400" />
+                    <span className="hidden sm:inline">Swap View</span>
+                  </button>
+                )}
+
                 <button
                   type="button"
                   onClick={handleOpenReportModal}
@@ -2416,18 +2450,18 @@ export default function Home() {
               </div>
             )}
 
-            {/* VIDEO MODE: WhatsApp-Style Floating Draggable 'You' Camera Preview */}
+            {/* VIDEO MODE: WhatsApp-Style Floating Draggable, Resizable & Swappable PiP Video Preview */}
             {chatMode === "video" && (
               <div
                 ref={pipRef}
                 style={
                   pipPos
                     ? {
-                      left: `${pipPos.x}px`,
-                      top: `${pipPos.y}px`,
-                      right: "auto",
-                      bottom: "auto",
-                    }
+                        left: `${pipPos.x}px`,
+                        top: `${pipPos.y}px`,
+                        right: "auto",
+                        bottom: "auto",
+                      }
                     : undefined
                 }
                 onMouseDown={(e) => {
@@ -2438,96 +2472,177 @@ export default function Home() {
                   if ((e.target as HTMLElement).closest("button")) return;
                   startDrag(e.touches[0].clientX, e.touches[0].clientY);
                 }}
-                className={`absolute ${!pipPos ? "bottom-4 right-4" : ""
-                  } z-20 w-32 h-44 sm:w-38 sm:h-50 bg-zinc-950 border border-white/20 rounded-2xl shadow-2xl overflow-hidden backdrop-blur-md flex flex-col justify-between p-2.5 transition-shadow ${isDragging ? "cursor-grabbing ring-2 ring-zinc-400/40" : "cursor-grab hover:border-white/40"
-                  }`}
+                onClick={(e) => {
+                  if ((e.target as HTMLElement).closest("button")) return;
+                  setIsSwappedFeeds((prev) => !prev);
+                }}
+                className={`absolute ${!pipPos ? "bottom-4 right-4" : ""} z-20 ${
+                  pipSize === "sm"
+                    ? "w-24 h-34 sm:w-30 sm:h-40"
+                    : pipSize === "lg"
+                    ? "w-36 h-50 sm:w-48 sm:h-64"
+                    : "w-28 h-40 sm:w-38 sm:h-52"
+                } bg-zinc-950 border border-white/20 rounded-2xl shadow-2xl overflow-hidden backdrop-blur-md flex flex-col justify-between p-2 sm:p-2.5 transition-all duration-200 ${
+                  isDragging
+                    ? "cursor-grabbing ring-2 ring-zinc-400/40"
+                    : "cursor-pointer hover:border-white/40 active:scale-[0.98]"
+                }`}
               >
-                {/* Local Webcam Video Stream (Mirrored on user facing, z-0) */}
-                <video
-                  ref={localVideoRef}
-                  autoPlay
-                  playsInline
-                  muted
-                  className={`absolute inset-0 w-full h-full object-cover z-0 ${facingMode === "user" ? "scale-x-[-1]" : ""
-                    } pointer-events-none transition-opacity duration-200 ${!localStream || hasCameraPermission === false ? "opacity-0" : "opacity-100"
+                {/* Floating Video Stream: Local webcam if normal, Stranger feed if swapped */}
+                {!isSwappedFeeds ? (
+                  <video
+                    ref={localVideoRef}
+                    autoPlay
+                    playsInline
+                    muted
+                    className={`absolute inset-0 w-full h-full object-cover z-0 ${
+                      facingMode === "user" ? "scale-x-[-1]" : ""
+                    } pointer-events-none transition-opacity duration-200 ${
+                      !localStream || hasCameraPermission === false ? "opacity-0" : "opacity-100"
                     }`}
-                />
+                  />
+                ) : (
+                  <video
+                    ref={remoteVideoRef}
+                    autoPlay
+                    playsInline
+                    onPlaying={() => setIsRemoteVideoPlaying(true)}
+                    onLoadedData={() => setIsRemoteVideoPlaying(true)}
+                    className={`absolute inset-0 w-full h-full object-cover z-0 transition-opacity duration-300 ${
+                      status === "connected" && remoteStream ? "opacity-100" : "opacity-0 hidden"
+                    }`}
+                  />
+                )}
 
-                {/* Drag Handle & Label (z-10 above video) */}
+                {/* Drag Handle, Label & WhatsApp Swap / Resize Controls (z-10 above video) */}
                 <div className="relative z-10 flex items-center justify-between w-full">
                   <div className="flex items-center gap-1.5 bg-black/60 backdrop-blur-md px-2 py-0.5 rounded-full border border-white/10 text-white text-[10px] font-medium">
-                    {userGender ? (
-                      <div className="w-3 h-3 rounded-full overflow-hidden flex items-center justify-center">
-                        <Image
-                          src={userGender === "male" ? "/male.svg" : "/female.svg"}
-                          alt={userGender}
-                          width={12}
-                          height={12}
-                          className="w-full h-full object-contain"
-                        />
-                      </div>
+                    {!isSwappedFeeds ? (
+                      <>
+                        {userGender ? (
+                          <div className="w-3 h-3 rounded-full overflow-hidden flex items-center justify-center">
+                            <Image
+                              src={userGender === "male" ? "/male.svg" : "/female.svg"}
+                              alt={userGender}
+                              width={12}
+                              height={12}
+                              className="w-full h-full object-contain"
+                            />
+                          </div>
+                        ) : (
+                          <span className="w-1.5 h-1.5 rounded-full bg-zinc-300" />
+                        )}
+                        <span>You</span>
+                      </>
                     ) : (
-                      <span className="w-1.5 h-1.5 rounded-full bg-zinc-300" />
+                      <>
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                        <span>Stranger</span>
+                      </>
                     )}
-                    <span>You</span>
                   </div>
-                  <div className="text-zinc-400 hover:text-white transition-colors p-0.5">
-                    <GripHorizontal className="w-3.5 h-3.5" />
+
+                  <div className="flex items-center gap-0.5 bg-black/60 backdrop-blur-md rounded-lg p-0.5 border border-white/10">
+                    {/* Swap Feeds Button */}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setIsSwappedFeeds((prev) => !prev);
+                      }}
+                      title={
+                        isSwappedFeeds
+                          ? "Switch main view back to Stranger"
+                          : "Switch main view to Your Camera (WhatsApp style)"
+                      }
+                      className="p-1 rounded text-zinc-300 hover:text-white hover:bg-white/15 transition-colors cursor-pointer"
+                    >
+                      <ArrowLeftRight className="w-3 h-3" />
+                    </button>
+
+                    {/* Manual Size Toggle Button */}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setPipSize((prev) => (prev === "sm" ? "md" : prev === "md" ? "lg" : "sm"));
+                      }}
+                      title={`Resize Preview: ${pipSize.toUpperCase()} (Click to toggle Small / Medium / Large)`}
+                      className="p-1 rounded text-zinc-300 hover:text-white hover:bg-white/15 transition-colors cursor-pointer"
+                    >
+                      {pipSize === "lg" ? <Minimize2 className="w-3 h-3" /> : <Maximize2 className="w-3 h-3" />}
+                    </button>
                   </div>
                 </div>
 
-                {/* Fallback View if Permission Pending */}
-                {(!localStream || hasCameraPermission === false) && (
+                {/* Fallback View if Permission Pending on Local Cam */}
+                {!isSwappedFeeds && (!localStream || hasCameraPermission === false) && (
                   <div className="relative z-10 flex-1 flex flex-col items-center justify-center my-1 pointer-events-none">
                     <button
                       type="button"
                       onClick={() => setShowPermissionModal(true)}
                       className="pointer-events-auto flex flex-col items-center gap-1.5 cursor-pointer text-amber-400 hover:text-amber-300 hover:scale-105 transition-all p-1"
                     >
-                      <AlertTriangle className="w-8 h-8 text-amber-400 stroke-[1.75]" />
+                      <AlertTriangle className="w-7 h-7 text-amber-400 stroke-[1.75]" />
                       <span className="text-[10px] font-semibold text-amber-300">Enable Cam</span>
                     </button>
                   </div>
                 )}
 
                 {/* Spacer when video is live */}
-                {localStream && hasCameraPermission !== false && (
-                  <div className="flex-1 pointer-events-none" />
-                )}
+                <div className="flex-1 pointer-events-none" />
 
-                {/* In-PiP Media Controls (Flip Camera & Mic Mute - Camera is STRICTLY Active) */}
+                {/* In-PiP Media Controls (Flip Camera & Mic Mute) */}
                 <div className="relative z-10 flex items-center justify-center gap-1 bg-black/60 backdrop-blur-md py-1 px-1.5 rounded-xl border border-white/10">
-                  {/* Flip Camera Button */}
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      toggleCameraFacing();
-                    }}
-                    disabled={isFlippingCamera || !localStream}
-                    title={`Flip Camera (Currently: ${facingMode === "user" ? "Front" : "Back"})`}
-                    className={`p-1.5 rounded-lg transition-colors cursor-pointer ${isFlippingCamera
-                      ? "text-indigo-400 animate-spin"
-                      : "text-zinc-300 hover:bg-white/10 hover:text-white"
-                      }`}
-                  >
-                    <SwitchCamera className="w-3.5 h-3.5" />
-                  </button>
-                  {/* Mute Mic Button */}
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      toggleMic();
-                    }}
-                    title={isMicMuted ? "Unmute Mic" : "Mute Mic"}
-                    className={`p-1.5 rounded-lg transition-colors cursor-pointer ${isMicMuted
-                      ? "bg-red-500/20 text-red-400"
-                      : "text-zinc-300 hover:bg-white/10 hover:text-white"
-                      }`}
-                  >
-                    {isMicMuted ? <MicOff className="w-3.5 h-3.5" /> : <Mic className="w-3.5 h-3.5" />}
-                  </button>
+                  {!isSwappedFeeds ? (
+                    <>
+                      {/* Flip Camera Button */}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleCameraFacing();
+                        }}
+                        disabled={isFlippingCamera || !localStream}
+                        title={`Flip Camera (Currently: ${facingMode === "user" ? "Front" : "Back"})`}
+                        className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                          isFlippingCamera
+                            ? "text-indigo-400 animate-spin"
+                            : "text-zinc-300 hover:bg-white/10 hover:text-white"
+                        }`}
+                      >
+                        <SwitchCamera className="w-3.5 h-3.5" />
+                      </button>
+                      {/* Mute Mic Button */}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleMic();
+                        }}
+                        title={isMicMuted ? "Unmute Mic" : "Mute Mic"}
+                        className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                          isMicMuted ? "bg-red-500/20 text-red-400" : "text-zinc-300 hover:bg-white/10 hover:text-white"
+                        }`}
+                      >
+                        {isMicMuted ? <MicOff className="w-3.5 h-3.5" /> : <Mic className="w-3.5 h-3.5" />}
+                      </button>
+                    </>
+                  ) : (
+                    /* When feeds are swapped, show Quick Report in Stranger PiP */
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleOpenReportModal();
+                      }}
+                      title="Report Stranger"
+                      className="p-1 rounded-lg text-red-400 hover:bg-red-950/40 transition-colors cursor-pointer flex items-center gap-1 text-[10px] font-semibold"
+                    >
+                      <Flag className="w-3.5 h-3.5" />
+                      <span>Report</span>
+                    </button>
+                  )}
                 </div>
               </div>
             )}
