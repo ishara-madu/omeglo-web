@@ -37,6 +37,7 @@ import {
   Activity,
   Flag,
   ShieldAlert,
+  RefreshCw,
 } from "lucide-react";
 import { getBrowserFingerprint } from "@/lib/fingerprint";
 import { filterMessage } from "@/lib/moderation/regexFilter";
@@ -356,6 +357,10 @@ export default function Home() {
 
   // Match Preference / Looking For Filter (Any / Female / Male)
   const [matchPreference, setMatchPreference] = useState<MatchPreference>("any");
+
+  // Next Button Spam Protection & Search Lock State
+  const [isNextDisabled, setIsNextDisabled] = useState(false);
+  const nextCooldownRef = useRef<number>(0);
 
   // Draggable PiP State
   const [pipPos, setPipPos] = useState<{ x: number; y: number } | null>(null);
@@ -1310,11 +1315,24 @@ export default function Home() {
     setStatus("disconnected");
   }, [cleanupCall, status]);
 
-  // Handle Next (Skip Stranger & Find New Match)
+  // Handle Next (Skip Stranger & Find New Match with 1.2s Spam Protection)
   const handleNext = useCallback(async () => {
+    // 1. Prevent clicking if already searching
+    if (status === "searching") return;
+
+    // 2. Continuous Click Rate-Limit / Cooldown (1.2s debounce)
+    const now = Date.now();
+    if (now - nextCooldownRef.current < 1200) return;
+    nextCooldownRef.current = now;
+
+    setIsNextDisabled(true);
+    setTimeout(() => {
+      setIsNextDisabled(false);
+    }, 1200);
+
     setAutoNextCountdown(null);
 
-    // 1. Video Mode Checks
+    // 3. Video Mode Checks
     if (chatMode === "video") {
       const net = await assessNetworkQuality();
       if (net.quality === "poor" || net.quality === "offline") {
@@ -1342,7 +1360,7 @@ export default function Home() {
         fingerprint: getBrowserFingerprint(),
       });
     }
-  }, [addSystemMessage, assessNetworkQuality, chatMode, cleanupCall, initLocalStream, matchPreference, userGender]);
+  }, [addSystemMessage, assessNetworkQuality, chatMode, cleanupCall, initLocalStream, matchPreference, status, userGender]);
 
   // Open Report Modal (Locks target to the currently active stranger snapshot)
   const handleOpenReportModal = useCallback(() => {
@@ -1522,7 +1540,7 @@ export default function Home() {
       }
 
       if (e.key === "Escape") {
-        if (status === "connected" || status === "searching") {
+        if (status === "connected") {
           handleNext();
         } else if (status === "disconnected") {
           handleStart();
@@ -2338,7 +2356,12 @@ export default function Home() {
                         <button
                           type="button"
                           onClick={() => handleNext()}
-                          className="h-8 px-3.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 active:scale-95 text-white text-xs font-medium transition-all cursor-pointer flex items-center gap-1.5 shadow-xs"
+                          disabled={isNextDisabled}
+                          className={`h-8 px-3.5 rounded-lg text-white text-xs font-medium transition-all flex items-center gap-1.5 shadow-xs ${
+                            isNextDisabled
+                              ? "bg-zinc-800 text-zinc-500 cursor-not-allowed opacity-60"
+                              : "bg-zinc-800 hover:bg-zinc-700 active:scale-95 cursor-pointer"
+                          }`}
                         >
                           <SkipForward className="w-3 h-3" />
                           <span>Next Now</span>
@@ -2525,13 +2548,28 @@ export default function Home() {
                   {/* Next / Skip Button */}
                   <button
                     onClick={handleNext}
-                    className="flex-1 sm:flex-none h-11 px-6 rounded-xl bg-zinc-950 hover:bg-zinc-800 active:scale-[0.98] text-white text-sm font-medium transition-all duration-150 flex items-center justify-center gap-2 shadow-xs cursor-pointer"
+                    disabled={status === "searching" || isNextDisabled}
+                    title={status === "searching" ? "Finding next stranger..." : "Next Stranger (Esc)"}
+                    className={`flex-1 sm:flex-none h-11 px-6 rounded-xl text-sm font-medium transition-all duration-150 flex items-center justify-center gap-2 shadow-xs ${
+                      status === "searching" || isNextDisabled
+                        ? "bg-zinc-800 text-zinc-400 opacity-60 cursor-not-allowed"
+                        : "bg-zinc-950 hover:bg-zinc-800 active:scale-[0.98] text-white cursor-pointer"
+                    }`}
                   >
-                    <SkipForward className="w-4 h-4" />
-                    <span>Next Stranger</span>
-                    <span className="hidden sm:inline-flex text-[10px] font-mono opacity-50 bg-white/15 px-1.5 py-0.5 rounded ml-1">
-                      Esc
-                    </span>
+                    {status === "searching" ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 animate-spin text-zinc-400" />
+                        <span>Searching...</span>
+                      </>
+                    ) : (
+                      <>
+                        <SkipForward className="w-4 h-4" />
+                        <span>Next Stranger</span>
+                        <span className="hidden sm:inline-flex text-[10px] font-mono opacity-50 bg-white/15 px-1.5 py-0.5 rounded ml-1">
+                          Esc
+                        </span>
+                      </>
+                    )}
                   </button>
                 </div>
               )}
