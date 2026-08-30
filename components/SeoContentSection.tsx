@@ -135,38 +135,38 @@ export default function SeoContentSection() {
       </div>
 
       {/* 3. How to Use Omeglo (3 Easy Steps) */}
-      <div className="space-y-8">
+      <div className="bg-zinc-950 text-white rounded-3xl p-8 sm:p-10 lg:p-12 space-y-8">
         <div className="max-w-2xl">
-          <span className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
+          <span className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
             Quick Start Guide
           </span>
-          <h2 className="text-xl sm:text-2xl font-bold tracking-tight mt-1 text-zinc-950">
+          <h2 className="text-xl sm:text-2xl font-bold tracking-tight mt-1 text-white">
             How to Start Chatting on Omeglo in 3 Steps
           </h2>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
           <div className="space-y-2">
-            <span className="text-2xl font-black text-zinc-300">01</span>
-            <h3 className="text-base font-bold text-zinc-950">Choose Chat Mode</h3>
-            <p className="text-xs sm:text-sm text-zinc-600 leading-relaxed">
-              Select <strong className="text-zinc-900">Video Chat</strong> to meet people face-to-face or <strong className="text-zinc-900">Text Chat</strong> for camera-free anonymous messaging.
+            <span className="text-2xl font-black text-zinc-600">01</span>
+            <h3 className="text-base font-bold text-white">Choose Chat Mode</h3>
+            <p className="text-xs sm:text-sm text-zinc-400 leading-relaxed">
+              Select <strong className="text-zinc-200">Video Chat</strong> to meet people face-to-face or <strong className="text-zinc-200">Text Chat</strong> for camera-free anonymous messaging.
             </p>
           </div>
 
           <div className="space-y-2">
-            <span className="text-2xl font-black text-zinc-300">02</span>
-            <h3 className="text-base font-bold text-zinc-950">Allow Permissions</h3>
-            <p className="text-xs sm:text-sm text-zinc-600 leading-relaxed">
+            <span className="text-2xl font-black text-zinc-600">02</span>
+            <h3 className="text-base font-bold text-white">Allow Permissions</h3>
+            <p className="text-xs sm:text-sm text-zinc-400 leading-relaxed">
               When prompted by your browser, allow Camera & Mic access (all video is direct P2P and never recorded).
             </p>
           </div>
 
           <div className="space-y-2">
-            <span className="text-2xl font-black text-zinc-300">03</span>
-            <h3 className="text-base font-bold text-zinc-950">Click Start & Enjoy</h3>
-            <p className="text-xs sm:text-sm text-zinc-600 leading-relaxed">
-              Hit <strong className="text-zinc-900">Start Chat</strong> to instantly meet a new stranger. Press <strong className="text-zinc-900">Skip</strong> or <strong className="text-zinc-900">Esc</strong> anytime to find someone new.
+            <span className="text-2xl font-black text-zinc-600">03</span>
+            <h3 className="text-base font-bold text-white">Click Start & Enjoy</h3>
+            <p className="text-xs sm:text-sm text-zinc-400 leading-relaxed">
+              Hit <strong className="text-zinc-200">Start Chat</strong> to instantly meet a new stranger. Press <strong className="text-zinc-200">Skip</strong> or <strong className="text-zinc-200">Esc</strong> anytime to find someone new.
             </p>
           </div>
         </div>

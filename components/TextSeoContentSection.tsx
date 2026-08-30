@@ -141,37 +141,37 @@ export default function TextSeoContentSection() {
       </div>
 
       {/* 3. Why Choose Omeglo Text Chat */}
-      <div className="space-y-8">
+      <div className="bg-zinc-950 text-white rounded-3xl p-8 sm:p-10 lg:p-12 space-y-8">
         <div className="max-w-2xl">
-          <span className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
+          <span className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
             Text Mode Benefits
           </span>
-          <h2 className="text-xl sm:text-2xl font-bold tracking-tight mt-1 text-zinc-950">
+          <h2 className="text-xl sm:text-2xl font-bold tracking-tight mt-1 text-white">
             Why Millions Prefer Anonymous Text Chat
           </h2>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
           <div className="space-y-2">
-            <span className="text-2xl font-black text-zinc-300">01</span>
-            <h3 className="text-base font-bold text-zinc-950">100% Identity Privacy</h3>
-            <p className="text-xs sm:text-sm text-zinc-600 leading-relaxed">
+            <span className="text-2xl font-black text-zinc-600">01</span>
+            <h3 className="text-base font-bold text-white">100% Identity Privacy</h3>
+            <p className="text-xs sm:text-sm text-zinc-400 leading-relaxed">
               Express your thoughts, share ideas, or practice languages without anyone seeing your face or environment.
             </p>
           </div>
 
           <div className="space-y-2">
-            <span className="text-2xl font-black text-zinc-300">02</span>
-            <h3 className="text-base font-bold text-zinc-950">Chat On the Go</h3>
-            <p className="text-xs sm:text-sm text-zinc-600 leading-relaxed">
+            <span className="text-2xl font-black text-zinc-600">02</span>
+            <h3 className="text-base font-bold text-white">Chat On the Go</h3>
+            <p className="text-xs sm:text-sm text-zinc-400 leading-relaxed">
               Ideal for public transit, libraries, or quiet spaces where video and microphone calls are impractical.
             </p>
           </div>
 
           <div className="space-y-2">
-            <span className="text-2xl font-black text-zinc-300">03</span>
-            <h3 className="text-base font-bold text-zinc-950">Zero App Installation</h3>
-            <p className="text-xs sm:text-sm text-zinc-600 leading-relaxed">
+            <span className="text-2xl font-black text-zinc-600">03</span>
+            <h3 className="text-base font-bold text-white">Zero App Installation</h3>
+            <p className="text-xs sm:text-sm text-zinc-400 leading-relaxed">
               Runs in standard web browsers across iPhone, Android, Windows, Mac, and Linux without downloading apps.
             </p>
           </div>
