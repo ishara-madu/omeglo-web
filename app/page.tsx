@@ -279,16 +279,11 @@ function applyLowLatencyNetworkOptimizations(call: MediaConnection | null) {
   setTimeout(optimizeSenders, 1200);
 }
 
-// Eye-friendly Multicolor Omeglo Brand Wordmark
+// SEO-friendly Multicolor Gradient Omeglo Brand Wordmark
 function OmegloWordmark({ size = "text-[19px]" }: { size?: string }) {
   return (
-    <span className={`font-bold tracking-[0.03em] select-none inline-flex items-center space-x-[0.6px] font-sans antialiased ${size}`}>
-      <span className="text-[#2563eb]">O</span>
-      <span className="text-[#f43f5e]">m</span>
-      <span className="text-[#f59e0b]">e</span>
-      <span className="text-[#10b981]">g</span>
-      <span className="text-[#6366f1]">l</span>
-      <span className="text-[#0d9488]">o</span>
+    <span className={`font-black tracking-tight select-none inline-block font-sans antialiased bg-gradient-to-r from-[#2563eb] via-[#e11d48] via-[#f59e0b] to-[#10b981] bg-clip-text text-transparent ${size}`}>
+      Omeglo
     </span>
   );
 }
