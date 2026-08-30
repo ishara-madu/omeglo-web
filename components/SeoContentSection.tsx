@@ -18,34 +18,39 @@ interface FAQItem {
 
 const faqs: FAQItem[] = [
   {
-    question: "What is Omeglo and how is it the best Omegle alternative?",
+    question: "Why is Omeglo considered the best free Omegle alternative without registration?",
     answer:
-      "Omeglo is a modern, fast, and completely free random video chat and anonymous text chat platform designed to connect you with strangers worldwide. Unlike legacy chat sites, Omeglo utilizes next-generation WebRTC peer-to-peer technology for ultra-low latency video, instant 0-second matching, built-in AI safety moderation, and gender filters without requiring any account creation or registration.",
+      "Omeglo is the top free Omegle alternative offering instant 1-on-1 random video chat and anonymous text chat with strangers worldwide. Unlike older chat sites, Omeglo features lightning-fast 0-second matching, peer-to-peer WebRTC encryption, AI-powered safety moderation, and gender filters without requiring any account creation, login, or personal details.",
   },
   {
-    question: "Is Omeglo 100% free to use?",
+    question: "Is Omeglo 100% free to use with no hidden subscriptions or credit card?",
     answer:
-      "Yes, Omeglo is 100% free. You can start video chatting or text chatting with random people immediately. There are no hidden subscription fees, credit card requirements, or paywalls.",
+      "Yes, Omeglo is completely free to use. You can start video chatting or text chatting with random strangers immediately. There are zero subscriptions, paywalls, credit card requirements, or hidden charges.",
   },
   {
-    question: "Do I need to create an account or provide personal details?",
+    question: "Can I video chat with random strangers on mobile (iPhone & Android) without downloading an app?",
     answer:
-      "No! Omeglo is completely anonymous. You don't need an email, phone number, password, or social login. Simply click 'Start Chatting' to connect instantly.",
+      "Yes! Omeglo is 100% browser-based and optimized for mobile devices. You can start high-definition video calls directly in Safari, Chrome, Firefox, or Edge on any smartphone or tablet without installing third-party apps.",
   },
   {
-    question: "Can I chat without a camera / webcam?",
+    question: "How can I talk to strangers without turning on my camera or webcam?",
     answer:
-      "Yes! You can use 'Text Chat' mode to connect anonymously via text only. No microphone or camera permissions are required in Text Mode.",
+      "You can simply switch to 'Text Chat' mode on Omeglo. Text mode is 100% camera-free and requires zero microphone or webcam permissions, allowing you to chat anonymously and comfortably from anywhere.",
   },
   {
-    question: "How does Omeglo protect user safety and privacy?",
+    question: "How does Omeglo protect user privacy and encrypt peer-to-peer video streams?",
     answer:
-      "Omeglo prioritizes user privacy and safety. All video and audio streams are transmitted directly between you and the stranger using encrypted WebRTC P2P connections—no video is stored on our servers. Additionally, our automated real-time moderation and user reporting systems proactively detect and blur inappropriate NSFW content to maintain a friendly, safe community.",
+      "All video and voice streams on Omeglo are transmitted directly between you and your chat partner using end-to-end WebRTC peer-to-peer connections. Video data is never recorded, saved, or routed through central media servers. We also employ real-time automated AI moderation to detect and filter inappropriate content.",
   },
   {
-    question: "What should I do if a stranger behaves inappropriately?",
+    question: "How does the gender preference filter work for matching with girls or guys?",
     answer:
-      "You can immediately skip to the next person by pressing the 'Skip / Next' button or pressing the 'Esc' key on your keyboard. You can also click the red 'Report' flag icon to submit an instant report, which flags the bad actor for immediate automated quarantine and review.",
+      "Omeglo allows you to select your preferred match filter (Both, Female, or Male) right on the control dock. Our matchmaking algorithm prioritizes pairing you with active online strangers matching your chosen preference.",
+  },
+  {
+    question: "What should I do if a stranger behaves inappropriately during a video chat?",
+    answer:
+      "You can immediately skip to a new stranger by clicking the 'Next Stranger' button or pressing the 'Esc' key. You can also click the red 'Report' flag icon to instantly submit an anonymous report, which quarantines the violator through our automated safety system.",
   },
 ];
 

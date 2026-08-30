@@ -19,29 +19,34 @@ interface FAQItem {
 
 const textFaqs: FAQItem[] = [
   {
-    question: "What is Omeglo Text Chat and how does it work?",
+    question: "What is Omeglo Text Chat and how is it a safe Omegle text alternative?",
     answer:
-      "Omeglo Text Chat is an instant anonymous messaging platform that connects you 1-on-1 with random strangers worldwide without using your webcam or microphone. You are paired in real-time and can chat purely through text.",
+      "Omeglo Text Chat is a fast, anonymous 1-on-1 text messaging platform that pairs you with random strangers globally. It works directly in your web browser with zero camera or microphone requirements, no user registration, and active AI safety moderation.",
   },
   {
-    question: "Do I need a camera or microphone to use Text Mode?",
+    question: "Can I talk to strangers online without camera, webcam, or microphone permissions?",
     answer:
-      "No! Text mode requires zero camera or microphone permissions. It is 100% camera-free, making it perfect for private chatting, low-bandwidth internet, or chatting in quiet environments.",
+      "Yes! Omeglo Text Mode is 100% camera-free and requires zero hardware permissions. It is ideal for quiet environments, low-bandwidth connections, and private conversations where you prefer not to share video.",
   },
   {
-    question: "Can strangers see my IP address or personal identity?",
+    question: "Can random strangers see my IP address, location, or private identity?",
     answer:
-      "No. Omeglo uses secure signaling and does not expose your real name, location, or personal contact details. All chats are completely anonymous.",
+      "No. Omeglo protects your privacy through secure signaling and encrypted peer-to-peer data channels. Your real name, IP address, and personal contact details are never disclosed to chat partners.",
   },
   {
-    question: "Are keyboard shortcuts supported in Text Mode?",
+    question: "Does Omeglo text chat support fast keyboard shortcuts like Esc to skip and Enter to send?",
     answer:
-      "Yes! You can press the 'Esc' key on your keyboard to instantly skip to a new stranger, and press 'Enter' to send messages effortlessly.",
+      "Yes! On desktop, you can hit the 'Esc' key to instantly disconnect and skip to a new stranger in 0 seconds, and press 'Enter' to send your message smoothly.",
   },
   {
-    question: "How does Omeglo prevent abusive messages and spam bots?",
+    question: "How does Omeglo block spam bots, malicious links, and toxic language in text chat?",
     answer:
-      "Omeglo runs real-time automated AI moderation and regex filters to detect offensive language, toxicity, and spam links before they reach you. You can also report any bad actor with the click of a button.",
+      "Omeglo utilizes real-time automated AI moderation, link blockers, and regex profanity filters to intercept spam bots and abusive text before it displays on your screen. You can also report disruptive users immediately.",
+  },
+  {
+    question: "Can I switch from anonymous text chat to live random video chat anytime?",
+    answer:
+      "Yes! You can switch between Text Chat and Video Chat with a single click using the mode switcher or the 'Switch to Video Mode' button without losing your place.",
   },
 ];
 
