@@ -3,7 +3,6 @@
 import { useState } from "react";
 import Link from "next/link";
 import {
-  Video,
   MessageSquare,
   ShieldCheck,
   Zap,
@@ -12,9 +11,10 @@ import {
   ChevronDown,
   Lock,
   UserCheck,
-  HeartHandshake,
-  CheckCircle2,
+  EyeOff,
+  Keyboard,
   HelpCircle,
+  Video,
 } from "lucide-react";
 
 interface FAQItem {
@@ -22,43 +22,38 @@ interface FAQItem {
   answer: string;
 }
 
-const faqs: FAQItem[] = [
+const textFaqs: FAQItem[] = [
   {
-    question: "What is Omeglo and how is it the best Omegle alternative?",
+    question: "What is Omeglo Text Chat and how does it work?",
     answer:
-      "Omeglo is a modern, fast, and completely free random video chat and anonymous text chat platform designed to connect you with strangers worldwide. Unlike legacy chat sites, Omeglo utilizes next-generation WebRTC peer-to-peer technology for ultra-low latency video, instant 0-second matching, built-in AI safety moderation, and gender filters without requiring any account creation or registration.",
+      "Omeglo Text Chat is an instant anonymous messaging platform that connects you 1-on-1 with random strangers worldwide without using your webcam or microphone. You are paired in real-time and can chat purely through text.",
   },
   {
-    question: "Is Omeglo 100% free to use?",
+    question: "Do I need a camera or microphone to use Text Mode?",
     answer:
-      "Yes, Omeglo is 100% free. You can start video chatting or text chatting with random people immediately. There are no hidden subscription fees, credit card requirements, or paywalls.",
+      "No! Text mode requires zero camera or microphone permissions. It is 100% camera-free, making it perfect for private chatting, low-bandwidth internet, or chatting in quiet environments.",
   },
   {
-    question: "Do I need to create an account or provide personal details?",
+    question: "Can strangers see my IP address or personal identity?",
     answer:
-      "No! Omeglo is completely anonymous. You don't need an email, phone number, password, or social login. Simply click 'Start Chatting' to connect instantly.",
+      "No. Omeglo uses secure signaling and does not expose your real name, location, or personal contact details. All chats are completely anonymous.",
   },
   {
-    question: "Can I chat without a camera / webcam?",
+    question: "Are keyboard shortcuts supported in Text Mode?",
     answer:
-      "Yes! You can use 'Text Chat' mode to connect anonymously via text only. No microphone or camera permissions are required in Text Mode.",
+      "Yes! You can press the 'Esc' key on your keyboard to instantly skip to a new stranger, and press 'Enter' to send messages effortlessly.",
   },
   {
-    question: "How does Omeglo protect user safety and privacy?",
+    question: "How does Omeglo prevent abusive messages and spam bots?",
     answer:
-      "Omeglo prioritizes user privacy and safety. All video and audio streams are transmitted directly between you and the stranger using encrypted WebRTC P2P connections—no video is stored on our servers. Additionally, our automated real-time moderation and user reporting systems proactively detect and blur inappropriate NSFW content to maintain a friendly, safe community.",
-  },
-  {
-    question: "What should I do if a stranger behaves inappropriately?",
-    answer:
-      "You can immediately skip to the next person by pressing the 'Skip / Next' button or pressing the 'Esc' key on your keyboard. You can also click the red 'Report' flag icon to submit an instant report, which flags the bad actor for immediate automated quarantine and review.",
+      "Omeglo runs real-time automated AI moderation and regex filters to detect offensive language, toxicity, and spam links before they reach you. You can also report any bad actor with the click of a button.",
   },
 ];
 
 const faqSchema = {
   "@context": "https://schema.org",
   "@type": "FAQPage",
-  mainEntity: faqs.map((faq) => ({
+  mainEntity: textFaqs.map((faq) => ({
     "@type": "Question",
     name: faq.question,
     acceptedAnswer: {
@@ -68,7 +63,7 @@ const faqSchema = {
   })),
 };
 
-export default function SeoContentSection() {
+export default function TextSeoContentSection() {
   const [openFaqIndex, setOpenFaqIndex] = useState<number | null>(null);
 
   const toggleFaq = (index: number) => {
@@ -86,54 +81,64 @@ export default function SeoContentSection() {
       {/* 1. Hero SEO Heading & Overview */}
       <div className="text-center max-w-3xl mx-auto space-y-4">
         <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-zinc-100 border border-zinc-200/80 text-zinc-700 text-xs font-semibold">
-          <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-          <span>The #1 Next-Generation Omegle Alternative</span>
+          <MessageSquare className="w-3.5 h-3.5 text-indigo-500" />
+          <span>100% Anonymous Text Chat • No Camera Required</span>
         </div>
 
         <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-zinc-950 tracking-tight leading-tight">
-          Free Random Video & Anonymous Text Chat with Strangers
+          Free Anonymous Random Text Chat with Strangers
         </h1>
 
         <p className="text-sm sm:text-base text-zinc-600 leading-relaxed">
-          Meet fascinating people from around the world in one click. Experience lightning-fast HD video calls, anonymous text messaging, gender preferences, and state-of-the-art privacy protection on Omeglo.
+          Looking to talk with strangers without turning on your webcam? Omeglo Text Chat lets you meet new people worldwide through instant, private, and camera-free text conversations with zero sign-up.
         </p>
+
+        <div className="flex items-center justify-center gap-3 pt-2">
+          <Link
+            href="/"
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-zinc-950 text-white text-xs font-semibold hover:bg-zinc-800 transition-all shadow-xs"
+          >
+            <Video className="w-3.5 h-3.5" />
+            <span>Switch to Video Mode</span>
+          </Link>
+        </div>
       </div>
 
-      {/* 2. Core Features Grid */}
+      {/* 2. Core Text Mode Features Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
         <div className="bg-white p-5 sm:p-6 rounded-2xl border border-zinc-200/80 shadow-2xs hover:border-zinc-300 transition-all">
           <div className="w-10 h-10 rounded-xl bg-zinc-950 text-white flex items-center justify-center mb-4">
-            <Video className="w-5 h-5" />
+            <EyeOff className="w-5 h-5" />
           </div>
           <h2 className="text-sm font-bold text-zinc-950 mb-1.5">
-            Instant HD Video Chat
+            Zero Camera Anxiety
           </h2>
           <p className="text-xs text-zinc-500 leading-relaxed">
-            Crystal clear video calls with zero latency powered by direct WebRTC peer-to-peer streaming.
+            No webcam or microphone permissions needed. Chat comfortably and privately from anywhere.
           </p>
         </div>
 
         <div className="bg-white p-5 sm:p-6 rounded-2xl border border-zinc-200/80 shadow-2xs hover:border-zinc-300 transition-all">
           <div className="w-10 h-10 rounded-xl bg-zinc-950 text-white flex items-center justify-center mb-4">
-            <Lock className="w-5 h-5" />
+            <Zap className="w-5 h-5" />
           </div>
           <h2 className="text-sm font-bold text-zinc-950 mb-1.5">
-            100% Private & Anonymous
+            Ultra-Low Data & Instant
           </h2>
           <p className="text-xs text-zinc-500 leading-relaxed">
-            No signup, registration, or credit card required. Your personal identity stays completely anonymous.
+            Works smoothly on 2G/3G/4G or slow internet connections with instant real-time message delivery.
           </p>
         </div>
 
         <div className="bg-white p-5 sm:p-6 rounded-2xl border border-zinc-200/80 shadow-2xs hover:border-zinc-300 transition-all">
           <div className="w-10 h-10 rounded-xl bg-zinc-950 text-white flex items-center justify-center mb-4">
-            <UserCheck className="w-5 h-5" />
+            <Keyboard className="w-5 h-5" />
           </div>
           <h2 className="text-sm font-bold text-zinc-950 mb-1.5">
-            Gender Match Preference
+            Fast Keyboard Shortcuts
           </h2>
           <p className="text-xs text-zinc-500 leading-relaxed">
-            Select your chat preference to find female, male, or open random chat matches effortlessly.
+            Press <kbd className="px-1 py-0.5 bg-zinc-100 border border-zinc-300 rounded text-[10px] font-mono">Esc</kbd> to quickly skip to a new partner and <kbd className="px-1 py-0.5 bg-zinc-100 border border-zinc-300 rounded text-[10px] font-mono">Enter</kbd> to send.
           </p>
         </div>
 
@@ -142,75 +147,75 @@ export default function SeoContentSection() {
             <ShieldCheck className="w-5 h-5" />
           </div>
           <h2 className="text-sm font-bold text-zinc-950 mb-1.5">
-            AI Automated Safety
+            AI Toxicity & Spam Shield
           </h2>
           <p className="text-xs text-zinc-500 leading-relaxed">
-            Real-time automated content filtering and swift one-click stranger reporting keep interactions friendly.
+            Built-in automated profanity and link filters protect you from spam bots and hostile behavior.
           </p>
         </div>
       </div>
 
-      {/* 3. How to Use Omeglo (3 Easy Steps) */}
+      {/* 3. Why Choose Omeglo Text Chat */}
       <div className="bg-zinc-950 text-white rounded-3xl p-6 sm:p-10 lg:p-12 relative overflow-hidden">
         <div className="max-w-2xl mb-8">
-          <span className="text-xs font-semibold uppercase tracking-wider text-emerald-400">
-            Quick Start Guide
+          <span className="text-xs font-semibold uppercase tracking-wider text-indigo-400">
+            Text Mode Benefits
           </span>
           <h2 className="text-xl sm:text-2xl font-bold tracking-tight mt-1 text-white">
-            How to Start Chatting on Omeglo in 3 Steps
+            Why Millions Prefer Anonymous Text Chat
           </h2>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 relative z-10">
           <div className="space-y-2 bg-zinc-900/80 border border-zinc-800 rounded-2xl p-5">
-            <div className="w-7 h-7 rounded-full bg-white text-zinc-950 font-bold text-xs flex items-center justify-center">
+            <div className="w-7 h-7 rounded-full bg-indigo-500 text-white font-bold text-xs flex items-center justify-center">
               1
             </div>
-            <h3 className="text-sm font-bold text-white">Choose Chat Mode</h3>
+            <h3 className="text-sm font-bold text-white">100% Identity Privacy</h3>
             <p className="text-xs text-zinc-400 leading-relaxed">
-              Select <strong>Video Chat</strong> to meet people face-to-face or <strong>Text Chat</strong> for camera-free anonymous messaging.
+              Express your thoughts, share ideas, or practice languages without anyone seeing your face or environment.
             </p>
           </div>
 
           <div className="space-y-2 bg-zinc-900/80 border border-zinc-800 rounded-2xl p-5">
-            <div className="w-7 h-7 rounded-full bg-white text-zinc-950 font-bold text-xs flex items-center justify-center">
+            <div className="w-7 h-7 rounded-full bg-indigo-500 text-white font-bold text-xs flex items-center justify-center">
               2
             </div>
-            <h3 className="text-sm font-bold text-white">Allow Permissions</h3>
+            <h3 className="text-sm font-bold text-white">Chat On the Go</h3>
             <p className="text-xs text-zinc-400 leading-relaxed">
-              When prompted by your browser, allow Camera & Mic access (all video is direct P2P and never recorded).
+              Ideal for public transit, libraries, or quiet spaces where video and microphone calls are impractical.
             </p>
           </div>
 
           <div className="space-y-2 bg-zinc-900/80 border border-zinc-800 rounded-2xl p-5">
-            <div className="w-7 h-7 rounded-full bg-white text-zinc-950 font-bold text-xs flex items-center justify-center">
+            <div className="w-7 h-7 rounded-full bg-indigo-500 text-white font-bold text-xs flex items-center justify-center">
               3
             </div>
-            <h3 className="text-sm font-bold text-white">Click Start & Enjoy</h3>
+            <h3 className="text-sm font-bold text-white">Zero App Installation</h3>
             <p className="text-xs text-zinc-400 leading-relaxed">
-              Hit <strong>Start Chat</strong> to instantly meet a new stranger. Press <strong>Skip</strong> or <strong>Esc</strong> anytime to find someone new.
+              Runs in standard web browsers across iPhone, Android, Windows, Mac, and Linux without downloading apps.
             </p>
           </div>
         </div>
       </div>
 
-      {/* 4. Frequently Asked Questions (FAQ) with Accordions */}
+      {/* 4. Text Mode FAQ Accordion with JSON-LD Schema */}
       <div className="max-w-3xl mx-auto space-y-6">
         <div className="text-center space-y-2">
           <div className="inline-flex items-center gap-1.5 text-xs font-semibold text-zinc-500 uppercase tracking-wider">
             <HelpCircle className="w-4 h-4 text-zinc-600" />
-            <span>Got Questions?</span>
+            <span>Text Chat Questions</span>
           </div>
           <h2 className="text-xl sm:text-2xl font-bold text-zinc-950 tracking-tight">
-            Frequently Asked Questions
+            Frequently Asked Questions about Text Mode
           </h2>
           <p className="text-xs sm:text-sm text-zinc-500">
-            Everything you need to know about using Omeglo safely and anonymously.
+            Answers to common questions about anonymous text chat on Omeglo.
           </p>
         </div>
 
         <div className="space-y-3 pt-2">
-          {faqs.map((faq, index) => {
+          {textFaqs.map((faq, index) => {
             const isOpen = openFaqIndex === index;
             return (
               <div

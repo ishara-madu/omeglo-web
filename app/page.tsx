@@ -55,6 +55,7 @@ import { getBrowserFingerprint } from "@/lib/fingerprint";
 import { filterMessage } from "@/lib/moderation/regexFilter";
 import { initToxicityDetector, checkTextToxicity } from "@/lib/moderation/toxicityDetector";
 import SeoContentSection from "@/components/SeoContentSection";
+import TextSeoContentSection from "@/components/TextSeoContentSection";
 import Footer from "@/components/Footer";
 
 type ChatMessage = {
@@ -3229,8 +3230,8 @@ export default function Home({ initialMode }: { initialMode?: ChatMode } = {}) {
         </section>
       </main>
 
-      {/* SEO Content Section: H1 Heading, Features, How-To & FAQ */}
-      <SeoContentSection />
+      {/* SEO Content Section: Tailored dynamically based on Video vs Text Chat Mode */}
+      {chatMode === "text" ? <TextSeoContentSection /> : <SeoContentSection />}
 
       {/* Universal Footer */}
       <Footer />
