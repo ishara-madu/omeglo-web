@@ -58,11 +58,7 @@ const faqSchema = {
   })),
 };
 
-interface TextSeoContentSectionProps {
-  onSwitchToVideo?: () => void;
-}
-
-export default function TextSeoContentSection({ onSwitchToVideo }: TextSeoContentSectionProps = {}) {
+export default function TextSeoContentSection() {
   const [openFaqIndex, setOpenFaqIndex] = useState<number | null>(null);
 
   const toggleFaq = (index: number) => {
@@ -175,16 +171,9 @@ export default function TextSeoContentSection({ onSwitchToVideo }: TextSeoConten
               <span>Seamlessly switch between text and video anytime</span>
             </div>
           </div>
-
           <div className="pt-2">
             <Link
               href="/"
-              onClick={(e) => {
-                if (onSwitchToVideo) {
-                  e.preventDefault();
-                  onSwitchToVideo();
-                }
-              }}
               className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-zinc-950 text-white text-xs font-semibold hover:bg-zinc-800 transition-all shadow-xs"
             >
               <Video className="w-3.5 h-3.5" />

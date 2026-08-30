@@ -2,7 +2,6 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import Image from "next/image";
-import { useRouter, usePathname } from "next/navigation";
 import { io, Socket } from "socket.io-client";
 import type { DataConnection, MediaConnection } from "peerjs";
 import {
@@ -361,15 +360,17 @@ const SOCKET_URL =
   "https://omeglo-backend.pocoma3486.workers.dev";
 
 export default function Home({ initialMode }: { initialMode?: ChatMode } = {}) {
-  const router = useRouter();
-  const pathname = usePathname();
   const [status, setStatus] = useState<ConnectionStatus>("idle");
   const [chatMode, setChatMode] = useState<ChatMode>(() => {
+    if (initialMode) return initialMode;
     if (typeof window !== "undefined") {
       if (window.location.pathname.startsWith("/text")) return "text";
-      return "video";
+      try {
+        const saved = localStorage.getItem("omeglo_chat_mode") as ChatMode;
+        if (saved === "text" || saved === "video") return saved;
+      } catch {}
     }
-    return initialMode || "video";
+    return "video";
   });
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
@@ -1404,29 +1405,37 @@ export default function Home({ initialMode }: { initialMode?: ChatMode } = {}) {
     chatModeRef.current = mode;
     try {
       localStorage.setItem("omeglo_chat_mode", mode);
+      if (typeof window !== "undefined") {
+        const targetPath = mode === "text" ? "/text" : "/";
+        if (window.location.pathname !== targetPath) {
+          window.history.pushState(null, "", targetPath);
+        }
+      }
     } catch { }
 
     if (mode === "video") {
       initLocalStream();
-      if (typeof window !== "undefined" && window.location.pathname.startsWith("/text")) {
-        router.push("/");
-      }
     } else if (mode === "text") {
+      // Completely release camera and microphone hardware tracks in Text mode
       stopLocalStream();
       cleanupCall();
-      if (typeof window !== "undefined" && !window.location.pathname.startsWith("/text")) {
-        router.push("/text");
-      }
     }
   };
 
-  // Browser Back/Forward & Next.js Router navigation sync
+  // Browser Back/Forward navigation sync
   useEffect(() => {
-    const targetMode: ChatMode = pathname?.startsWith("/text") ? "text" : "video";
-    if (chatModeRef.current !== targetMode) {
-      handleModeChange(targetMode);
-    }
-  }, [pathname]);
+    const handlePopState = () => {
+      if (typeof window !== "undefined") {
+        const path = window.location.pathname;
+        const targetMode: ChatMode = path.startsWith("/text") ? "text" : "video";
+        if (chatModeRef.current !== targetMode) {
+          handleModeChange(targetMode);
+        }
+      }
+    };
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
 
   // Auto-scroll chat internally (only inside the chat box container, preventing whole-page scrolling)
   useEffect(() => {
@@ -3227,11 +3236,7 @@ export default function Home({ initialMode }: { initialMode?: ChatMode } = {}) {
       </main>
 
       {/* SEO Content Section: Tailored dynamically based on Video vs Text Chat Mode */}
-      {chatMode === "text" ? (
-        <TextSeoContentSection onSwitchToVideo={() => handleModeChange("video")} />
-      ) : (
-        <SeoContentSection />
-      )}
+      {chatMode === "text" ? <TextSeoContentSection /> : <SeoContentSection />}
 
       {/* Universal Footer */}
       <Footer />
