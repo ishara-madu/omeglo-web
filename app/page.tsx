@@ -279,10 +279,18 @@ function applyLowLatencyNetworkOptimizations(call: MediaConnection | null) {
   setTimeout(optimizeSenders, 1200);
 }
 
-// SEO-friendly Multicolor Gradient Omeglo Brand Wordmark
+// 100% SEO-Proof Multicolor Omeglo Brand Wordmark (Single Text Node with Sharp CSS Hard-Stops)
 function OmegloWordmark({ size = "text-[19px]" }: { size?: string }) {
   return (
-    <span className={`font-black tracking-tight select-none inline-block font-sans antialiased bg-gradient-to-r from-[#2563eb] via-[#e11d48] via-[#f59e0b] to-[#10b981] bg-clip-text text-transparent ${size}`}>
+    <span
+      className={`font-extrabold tracking-tight select-none inline-block font-sans antialiased bg-clip-text text-transparent ${size}`}
+      style={{
+        backgroundImage:
+          "linear-gradient(to right, #2563eb 0%, #2563eb 18%, #f43f5e 18%, #f43f5e 46%, #f59e0b 46%, #f59e0b 61%, #10b981 61%, #10b981 76%, #6366f1 76%, #6366f1 85%, #0d9488 85%, #0d9488 100%)",
+        WebkitBackgroundClip: "text",
+        WebkitTextFillColor: "transparent",
+      }}
+    >
       Omeglo
     </span>
   );
