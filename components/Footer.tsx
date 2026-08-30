@@ -1,6 +1,6 @@
 import Link from "next/link";
 import Image from "next/image";
-import { Shield, Lock, Globe, Heart, MessageSquare, Video } from "lucide-react";
+import { Shield, Lock, Globe, MessageSquare, Video } from "lucide-react";
 
 export default function Footer() {
   const currentYear = new Date().getFullYear();
@@ -24,7 +24,7 @@ export default function Footer() {
               <span className="font-extrabold text-lg tracking-tight text-zinc-950">
                 Omeglo
               </span>
-              <span className="px-2 py-0.5 text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/60 rounded-full">
+              <span className="text-[11px] font-semibold text-emerald-600">
                 100% Free
               </span>
             </div>
@@ -32,15 +32,15 @@ export default function Footer() {
               Omeglo is the premier free, anonymous random video and text chat platform. Connect instantly with verified strangers worldwide through encrypted peer-to-peer WebRTC connections with zero registration.
             </p>
             <div className="flex items-center gap-3 text-zinc-400 text-xs pt-1">
-              <span className="inline-flex items-center gap-1">
+              <span className="inline-flex items-center gap-1.5 text-zinc-600">
                 <Lock className="w-3.5 h-3.5 text-zinc-500" /> End-to-End P2P
               </span>
               <span>•</span>
-              <span className="inline-flex items-center gap-1">
+              <span className="inline-flex items-center gap-1.5 text-zinc-600">
                 <Shield className="w-3.5 h-3.5 text-zinc-500" /> AI Moderated
               </span>
               <span>•</span>
-              <span className="inline-flex items-center gap-1">
+              <span className="inline-flex items-center gap-1.5 text-zinc-600">
                 <Globe className="w-3.5 h-3.5 text-zinc-500" /> Worldwide
               </span>
             </div>
@@ -57,7 +57,7 @@ export default function Footer() {
                   href="/"
                   className="text-zinc-600 hover:text-zinc-950 flex items-center gap-1.5 transition-colors"
                 >
-                  <Video className="w-3.5 h-3.5 text-zinc-400" />
+                  <Video className="w-3.5 h-3.5 text-zinc-500" />
                   <span>Random Video Chat</span>
                 </Link>
               </li>
@@ -66,7 +66,7 @@ export default function Footer() {
                   href="/text"
                   className="text-zinc-600 hover:text-zinc-950 flex items-center gap-1.5 transition-colors"
                 >
-                  <MessageSquare className="w-3.5 h-3.5 text-zinc-400" />
+                  <MessageSquare className="w-3.5 h-3.5 text-zinc-500" />
                   <span>Anonymous Text Chat</span>
                 </Link>
               </li>
@@ -116,9 +116,9 @@ export default function Footer() {
         </div>
 
         {/* 18+ Disclaimer & Copyright Bottom Bar */}
-        <div className="pt-6 border-t border-zinc-100 flex flex-col sm:flex-row items-center justify-between gap-4 text-[11px] text-zinc-400">
+        <div className="pt-6 border-t border-zinc-200/80 flex flex-col sm:flex-row items-center justify-between gap-4 text-[11px] text-zinc-500">
           <div className="flex items-center gap-2">
-            <span className="px-1.5 py-0.5 font-bold text-[10px] bg-zinc-900 text-white rounded-md">
+            <span className="font-bold text-zinc-950">
               18+
             </span>
             <span>
