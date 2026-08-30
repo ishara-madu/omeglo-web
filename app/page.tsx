@@ -279,19 +279,21 @@ function applyLowLatencyNetworkOptimizations(call: MediaConnection | null) {
   setTimeout(optimizeSenders, 1200);
 }
 
-// 100% SEO-Proof Multicolor Omeglo Brand Wordmark (Single Text Node with Sharp CSS Hard-Stops)
+// 100% SEO-Proof & Pixel-Perfect Multicolor Omeglo Brand Wordmark
 function OmegloWordmark({ size = "text-[19px]" }: { size?: string }) {
   return (
-    <span
-      className={`font-extrabold tracking-tight select-none inline-block font-sans antialiased bg-clip-text text-transparent ${size}`}
-      style={{
-        backgroundImage:
-          "linear-gradient(to right, #2563eb 0%, #2563eb 18%, #f43f5e 18%, #f43f5e 46%, #f59e0b 46%, #f59e0b 61%, #10b981 61%, #10b981 76%, #6366f1 76%, #6366f1 85%, #0d9488 85%, #0d9488 100%)",
-        WebkitBackgroundClip: "text",
-        WebkitTextFillColor: "transparent",
-      }}
-    >
-      Omeglo
+    <span className={`font-bold tracking-[0.02em] select-none inline-flex items-center font-sans antialiased ${size}`}>
+      {/* 100% SEO & Screen-Reader Crawler Indexed Single Word */}
+      <span className="sr-only">Omeglo</span>
+      {/* Pixel-Perfect Individual Color Letters with Zero Bleeding */}
+      <span aria-hidden="true" className="inline-flex items-center">
+        <span className="text-[#2563eb]">O</span>
+        <span className="text-[#f43f5e]">m</span>
+        <span className="text-[#f59e0b]">e</span>
+        <span className="text-[#10b981]">g</span>
+        <span className="text-[#6366f1]">l</span>
+        <span className="text-[#0d9488]">o</span>
+      </span>
     </span>
   );
 }
