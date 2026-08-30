@@ -4,18 +4,58 @@ import Image from "next/image";
 import { ArrowLeft, Shield, Lock, EyeOff, Server, Cookie } from "lucide-react";
 import Footer from "@/components/Footer";
 
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://omeglo.com";
+
 export const metadata: Metadata = {
   title: "Privacy Policy",
   description:
     "Learn how Omeglo protects your privacy, personal anonymity, and WebRTC peer-to-peer data encryption.",
   alternates: {
-    canonical: "/privacy",
+    canonical: `${siteUrl}/privacy`,
   },
+  openGraph: {
+    title: "Privacy Policy | Omeglo",
+    description: "Learn how Omeglo protects your privacy, personal anonymity, and WebRTC data encryption.",
+    url: `${siteUrl}/privacy`,
+    siteName: "Omeglo",
+    images: [{ url: "/opengraph-image.webp", width: 1200, height: 630, alt: "Omeglo Privacy Policy" }],
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Privacy Policy | Omeglo",
+    description: "Learn how Omeglo protects your privacy, personal anonymity, and WebRTC data encryption.",
+    images: ["/opengraph-image.webp"],
+  },
+};
+
+const breadcrumbSchema = {
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {
+      "@type": "ListItem",
+      "position": 1,
+      "name": "Home",
+      "item": siteUrl,
+    },
+    {
+      "@type": "ListItem",
+      "position": 2,
+      "name": "Privacy Policy",
+      "item": `${siteUrl}/privacy`,
+    },
+  ],
 };
 
 export default function PrivacyPage() {
   return (
     <div className="min-h-screen flex flex-col bg-white text-zinc-900 font-sans">
+      {/* Breadcrumb JSON-LD */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }}
+      />
       {/* Header */}
       <header className="w-full bg-white/95 backdrop-blur-md border-b border-zinc-200/70 sticky top-0 z-30">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">

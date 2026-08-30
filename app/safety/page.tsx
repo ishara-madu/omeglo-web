@@ -4,18 +4,58 @@ import Image from "next/image";
 import { ArrowLeft, ShieldCheck, Flag, AlertTriangle, Eye, Lock, ThumbsUp } from "lucide-react";
 import Footer from "@/components/Footer";
 
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://omeglo.com";
+
 export const metadata: Metadata = {
   title: "Safety & Community Guidelines",
   description:
     "Discover how to stay safe while video chatting on Omeglo, how our AI moderation works, and how to report rule violations.",
   alternates: {
-    canonical: "/safety",
+    canonical: `${siteUrl}/safety`,
   },
+  openGraph: {
+    title: "Safety & Community Guidelines | Omeglo",
+    description: "Learn about Omeglo safety guidelines, AI moderation, and reporting tools.",
+    url: `${siteUrl}/safety`,
+    siteName: "Omeglo",
+    images: [{ url: "/opengraph-image.webp", width: 1200, height: 630, alt: "Omeglo Safety Guidelines" }],
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Safety & Community Guidelines | Omeglo",
+    description: "Learn about Omeglo safety guidelines, AI moderation, and reporting tools.",
+    images: ["/opengraph-image.webp"],
+  },
+};
+
+const breadcrumbSchema = {
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {
+      "@type": "ListItem",
+      "position": 1,
+      "name": "Home",
+      "item": siteUrl,
+    },
+    {
+      "@type": "ListItem",
+      "position": 2,
+      "name": "Safety & Guidelines",
+      "item": `${siteUrl}/safety`,
+    },
+  ],
 };
 
 export default function SafetyPage() {
   return (
     <div className="min-h-screen flex flex-col bg-white text-zinc-900 font-sans">
+      {/* Breadcrumb JSON-LD */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }}
+      />
       {/* Header */}
       <header className="w-full bg-white/95 backdrop-blur-md border-b border-zinc-200/70 sticky top-0 z-30">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">

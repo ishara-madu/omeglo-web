@@ -4,13 +4,48 @@ import Image from "next/image";
 import { ArrowLeft, HelpCircle, Video, MessageSquare, Shield, Lock } from "lucide-react";
 import Footer from "@/components/Footer";
 
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://omeglo.com";
+
 export const metadata: Metadata = {
   title: "Frequently Asked Questions (FAQ)",
   description:
     "Got questions about Omeglo? Find answers about video chat, text chat, anonymity, camera permissions, and privacy protection.",
   alternates: {
-    canonical: "/faq",
+    canonical: `${siteUrl}/faq`,
   },
+  openGraph: {
+    title: "Frequently Asked Questions (FAQ) | Omeglo",
+    description: "Answers about video chat, text chat, anonymity, camera permissions, and privacy on Omeglo.",
+    url: `${siteUrl}/faq`,
+    siteName: "Omeglo",
+    images: [{ url: "/opengraph-image.webp", width: 1200, height: 630, alt: "Omeglo FAQ" }],
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Frequently Asked Questions (FAQ) | Omeglo",
+    description: "Answers about video chat, text chat, anonymity, camera permissions, and privacy on Omeglo.",
+    images: ["/opengraph-image.webp"],
+  },
+};
+
+const breadcrumbSchema = {
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {
+      "@type": "ListItem",
+      "position": 1,
+      "name": "Home",
+      "item": siteUrl,
+    },
+    {
+      "@type": "ListItem",
+      "position": 2,
+      "name": "FAQ",
+      "item": `${siteUrl}/faq`,
+    },
+  ],
 };
 
 const faqItems = [
@@ -85,10 +120,14 @@ const faqSchema = {
 export default function FAQPage() {
   return (
     <div className="min-h-screen flex flex-col bg-white text-zinc-900 font-sans">
-      {/* Schema.org FAQ JSON-LD for Google Rich Snippets */}
+      {/* Schema.org FAQ & Breadcrumb JSON-LD for Google Rich Snippets */}
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(faqSchema) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }}
       />
 
       {/* Header */}

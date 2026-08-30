@@ -155,6 +155,8 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <head>
+        <link rel="dns-prefetch" href="https://omeglo-backend.pocoma3486.workers.dev" />
+        <link rel="preconnect" href="https://omeglo-backend.pocoma3486.workers.dev" crossOrigin="anonymous" />
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
