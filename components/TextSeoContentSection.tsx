@@ -58,7 +58,11 @@ const faqSchema = {
   })),
 };
 
-export default function TextSeoContentSection() {
+interface TextSeoContentSectionProps {
+  onSwitchToVideo?: () => void;
+}
+
+export default function TextSeoContentSection({ onSwitchToVideo }: TextSeoContentSectionProps = {}) {
   const [openFaqIndex, setOpenFaqIndex] = useState<number | null>(null);
 
   const toggleFaq = (index: number) => {
@@ -86,16 +90,6 @@ export default function TextSeoContentSection() {
         <p className="text-sm sm:text-base text-zinc-600 leading-relaxed">
           Looking to talk with strangers without turning on your webcam? Omeglo Text Chat lets you meet new people worldwide through instant, private, and camera-free text conversations with zero sign-up.
         </p>
-
-        <div className="flex items-center justify-center gap-3 pt-2">
-          <Link
-            href="/"
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-zinc-950 text-white text-xs font-semibold hover:bg-zinc-800 transition-all shadow-xs"
-          >
-            <Video className="w-3.5 h-3.5" />
-            <span>Switch to Video Mode</span>
-          </Link>
-        </div>
       </div>
 
       {/* 2. Core Text Mode Features Grid */}
@@ -180,6 +174,22 @@ export default function TextSeoContentSection() {
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
               <span>Seamlessly switch between text and video anytime</span>
             </div>
+          </div>
+
+          <div className="pt-2">
+            <Link
+              href="/"
+              onClick={(e) => {
+                if (onSwitchToVideo) {
+                  e.preventDefault();
+                  onSwitchToVideo();
+                }
+              }}
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-zinc-950 text-white text-xs font-semibold hover:bg-zinc-800 transition-all shadow-xs"
+            >
+              <Video className="w-3.5 h-3.5" />
+              <span>Switch to Video Mode</span>
+            </Link>
           </div>
         </div>
       </div>

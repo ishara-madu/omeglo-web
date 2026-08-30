@@ -21,8 +21,16 @@ export default function Footer() {
                   className="w-full h-full object-contain"
                 />
               </div>
-              <span className="font-extrabold text-lg tracking-tight text-zinc-950">
-                Omeglo
+              <span className="font-bold text-lg tracking-[0.02em] select-none inline-flex items-center font-sans antialiased">
+                <span className="sr-only">Omeglo</span>
+                <span aria-hidden="true" className="inline-flex items-center">
+                  <span className="text-[#2563eb]">O</span>
+                  <span className="text-[#f43f5e]">m</span>
+                  <span className="text-[#f59e0b]">e</span>
+                  <span className="text-[#10b981]">g</span>
+                  <span className="text-[#6366f1]">l</span>
+                  <span className="text-[#0d9488]">o</span>
+                </span>
               </span>
               <span className="text-[11px] font-semibold text-emerald-600">
                 100% Free

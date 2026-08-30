@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import Image from "next/image";
+import { usePathname } from "next/navigation";
 import { io, Socket } from "socket.io-client";
 import type { DataConnection, MediaConnection } from "peerjs";
 import {
@@ -360,15 +361,13 @@ const SOCKET_URL =
   "https://omeglo-backend.pocoma3486.workers.dev";
 
 export default function Home({ initialMode }: { initialMode?: ChatMode } = {}) {
+  const pathname = usePathname();
   const [status, setStatus] = useState<ConnectionStatus>("idle");
   const [chatMode, setChatMode] = useState<ChatMode>(() => {
     if (initialMode) return initialMode;
     if (typeof window !== "undefined") {
       if (window.location.pathname.startsWith("/text")) return "text";
-      try {
-        const saved = localStorage.getItem("omeglo_chat_mode") as ChatMode;
-        if (saved === "text" || saved === "video") return saved;
-      } catch {}
+      return "video";
     }
     return "video";
   });
@@ -1422,7 +1421,15 @@ export default function Home({ initialMode }: { initialMode?: ChatMode } = {}) {
     }
   };
 
-  // Browser Back/Forward navigation sync
+  // Browser Back/Forward & Next.js Router navigation sync
+  useEffect(() => {
+    const targetMode: ChatMode =
+      initialMode || (pathname?.startsWith("/text") ? "text" : "video");
+    if (chatModeRef.current !== targetMode) {
+      handleModeChange(targetMode);
+    }
+  }, [pathname, initialMode]);
+
   useEffect(() => {
     const handlePopState = () => {
       if (typeof window !== "undefined") {
@@ -3236,7 +3243,11 @@ export default function Home({ initialMode }: { initialMode?: ChatMode } = {}) {
       </main>
 
       {/* SEO Content Section: Tailored dynamically based on Video vs Text Chat Mode */}
-      {chatMode === "text" ? <TextSeoContentSection /> : <SeoContentSection />}
+      {chatMode === "text" ? (
+        <TextSeoContentSection onSwitchToVideo={() => handleModeChange("video")} />
+      ) : (
+        <SeoContentSection />
+      )}
 
       {/* Universal Footer */}
       <Footer />
