@@ -109,7 +109,7 @@ export default function FAQPage() {
       </header>
 
       {/* Main Content */}
-      <main className="flex-1 max-w-4xl w-full mx-auto px-4 sm:px-6 py-10 sm:py-14 space-y-10">
+      <main className="flex-1 max-w-4xl w-full mx-auto px-4 sm:px-6 py-12 sm:py-16 space-y-12 sm:space-y-16">
         <div className="space-y-2 border-b border-zinc-200 pb-6">
           <div className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
             Help Center & FAQ

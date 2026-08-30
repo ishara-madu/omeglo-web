@@ -70,7 +70,7 @@ export default function SeoContentSection() {
   };
 
   return (
-    <section className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-12 sm:mt-16 space-y-16">
+    <section className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-16 sm:mt-24 lg:mt-28 space-y-20 sm:space-y-28 lg:space-y-32">
       {/* Schema.org FAQ JSON-LD for Google Rich Snippets */}
       <script
         type="application/ld+json"
