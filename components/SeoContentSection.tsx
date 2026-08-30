@@ -216,20 +216,20 @@ export default function SeoContentSection() {
       </div>
 
       {/* 4. Frequently Asked Questions (FAQ) with Accordions */}
-      <div className="max-w-3xl mx-auto space-y-6">
-        <div className="text-center space-y-2">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-16 items-start">
+        <div className="lg:col-span-4 space-y-2 lg:sticky lg:top-24">
           <span className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
             Got Questions?
           </span>
-          <h2 className="text-xl sm:text-2xl font-bold text-zinc-950 tracking-tight">
+          <h2 className="text-2xl sm:text-3xl font-extrabold text-zinc-950 tracking-tight leading-tight">
             Frequently Asked Questions
           </h2>
-          <p className="text-xs sm:text-sm text-zinc-600">
+          <p className="text-xs sm:text-sm text-zinc-600 leading-relaxed">
             Everything you need to know about using Omeglo safely and anonymously.
           </p>
         </div>
 
-        <div className="divide-y divide-zinc-200/80 border-y border-zinc-200/80 pt-2">
+        <div className="lg:col-span-8 divide-y divide-zinc-200/80 border-y border-zinc-200/80">
           {faqs.map((faq, index) => {
             const isOpen = openFaqIndex === index;
             return (

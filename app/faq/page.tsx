@@ -122,17 +122,19 @@ export default function FAQPage() {
           </p>
         </div>
 
-        <div className="space-y-10">
+        <div className="space-y-12">
           {faqItems.map((category, idx) => (
-            <div key={idx} className="space-y-4">
-              <h2 className="text-base font-bold text-zinc-950 border-b border-zinc-200/80 pb-2">
-                {category.category}
-              </h2>
-              <div className="divide-y divide-zinc-100">
+            <div key={idx} className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-12 items-start border-t border-zinc-200/80 pt-8 first:border-t-0 first:pt-0">
+              <div className="lg:col-span-4 lg:sticky lg:top-24">
+                <h2 className="text-base sm:text-lg font-bold text-zinc-950">
+                  {category.category}
+                </h2>
+              </div>
+              <div className="lg:col-span-8 divide-y divide-zinc-100">
                 {category.items.map((item, itemIdx) => (
                   <div
                     key={itemIdx}
-                    className="py-4 space-y-1.5"
+                    className="py-4 first:pt-0 space-y-1.5"
                   >
                     <h3 className="text-sm font-semibold text-zinc-900">
                       {item.q}
