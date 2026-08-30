@@ -1998,43 +1998,44 @@ export default function Home({ initialMode }: { initialMode?: ChatMode } = {}) {
     <div className="min-h-screen flex flex-col bg-zinc-50 text-zinc-900 font-sans selection:bg-zinc-900 selection:text-white select-none sm:select-auto">
       {/* INSUFFICIENT / WEAK NETWORK SIGNAL MODAL */}
       {showWeakSignalModal && (
-        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200">
-          <div className="bg-white rounded-3xl p-6 sm:p-7 max-w-md w-full border border-zinc-200 shadow-2xl flex flex-col items-center text-center relative">
+        <div className="fixed inset-0 z-50 bg-zinc-950/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl p-6 sm:p-7 max-w-md w-full border border-zinc-200/80 shadow-2xl flex flex-col items-center text-center relative">
             {/* Close Button */}
             <button
+              type="button"
               onClick={() => setShowWeakSignalModal(false)}
-              className="absolute top-4 right-4 p-1.5 rounded-full text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 transition-colors cursor-pointer"
+              className="absolute top-4 right-4 p-2 rounded-full text-zinc-400 hover:text-zinc-950 hover:bg-zinc-100 transition-colors cursor-pointer"
             >
               <X className="w-4 h-4" />
             </button>
 
-            {/* Red Weak Signal Icon */}
-            <div className="flex items-center justify-center mb-3 text-red-500">
-              <WifiOff className="w-11 h-11 stroke-[1.5]" />
+            {/* Weak Signal Icon */}
+            <div className="flex items-center justify-center mb-3 text-zinc-900">
+              <WifiOff className="w-10 h-10 stroke-[1.5]" />
             </div>
 
             <h2 className="text-lg font-bold tracking-tight text-zinc-950 mb-1">
               Slow Internet Connection
             </h2>
             <p className="text-xs text-zinc-500 mb-4 leading-relaxed max-w-xs">
-              Video chat needs a faster connection. Your current speed is too slow for smooth video.
+              Video chat needs a stable connection. Your current speed is too slow for smooth video calls.
             </p>
 
             {/* Network Diagnostic Info Box */}
-            <div className="w-full bg-zinc-50 border border-zinc-200/80 rounded-2xl p-3.5 mb-5 text-left text-xs space-y-2">
-              <div className="flex items-center justify-between text-zinc-700 pb-1.5 border-b border-zinc-200/60">
-                <span className="font-medium text-zinc-500">Internet Speed:</span>
+            <div className="w-full bg-zinc-50 border border-zinc-200/80 rounded-2xl p-4 mb-5 text-left text-xs space-y-2.5">
+              <div className="flex items-center justify-between text-zinc-700 pb-2 border-b border-zinc-200/60">
+                <span className="font-medium text-zinc-500">Internet Speed</span>
                 <span className="font-semibold text-red-600 flex items-center gap-1.5">
                   <span className="w-2 h-2 rounded-full bg-red-500 animate-ping" />
                   {networkQuality === "offline" ? "Offline" : "Very Slow"}
                 </span>
               </div>
               <div className="flex items-center justify-between text-zinc-600">
-                <span>Response Delay:</span>
-                <span className="font-mono font-medium">{networkStats.rtt} ms</span>
+                <span>Response Delay</span>
+                <span className="font-mono font-medium text-zinc-900">{networkStats.rtt} ms</span>
               </div>
-              <div className="text-[11px] text-zinc-400 pt-1 leading-normal">
-                💡 <strong>Tip:</strong> Move closer to Wi-Fi, pause downloads, or switch to <strong>Text Mode</strong> to chat without video.
+              <div className="text-[11px] text-zinc-500 pt-1 leading-relaxed">
+                Tip: Move closer to Wi-Fi, pause background downloads, or switch to <strong>Text Mode</strong> to chat with zero camera requirement.
               </div>
             </div>
 
@@ -2060,7 +2061,7 @@ export default function Home({ initialMode }: { initialMode?: ChatMode } = {}) {
                   setShowWeakSignalModal(false);
                   handleModeChange("text");
                 }}
-                className="w-full sm:w-auto h-11 px-4 rounded-xl bg-zinc-100 hover:bg-zinc-200 text-zinc-800 text-xs font-medium transition-colors cursor-pointer"
+                className="w-full sm:w-auto h-11 px-4 rounded-xl bg-zinc-100 hover:bg-zinc-200 text-zinc-700 text-xs font-medium transition-colors cursor-pointer"
               >
                 Switch to Text Mode
               </button>
@@ -2068,7 +2069,6 @@ export default function Home({ initialMode }: { initialMode?: ChatMode } = {}) {
           </div>
         </div>
       )}
-
 
       {/* FLOATING AI & MODERATION ALERT TOAST */}
       {aiModerationToast && (
@@ -2087,40 +2087,45 @@ export default function Home({ initialMode }: { initialMode?: ChatMode } = {}) {
 
       {/* CAMERA & MIC PERMISSION MANDATORY MODAL (VIDEO MODE ONLY) */}
       {showPermissionModal && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200">
-          <div className="bg-white rounded-3xl p-6 sm:p-7 max-w-md w-full border border-zinc-200 shadow-2xl flex flex-col items-center text-center relative">
+        <div className="fixed inset-0 z-50 bg-zinc-950/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl p-6 sm:p-7 max-w-md w-full border border-zinc-200/80 shadow-2xl flex flex-col items-center text-center relative">
             {/* Close Button */}
             <button
+              type="button"
               onClick={() => setShowPermissionModal(false)}
-              className="absolute top-4 right-4 p-1.5 rounded-full text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 transition-colors cursor-pointer"
+              className="absolute top-4 right-4 p-2 rounded-full text-zinc-400 hover:text-zinc-950 hover:bg-zinc-100 transition-colors cursor-pointer"
             >
               <X className="w-4 h-4" />
             </button>
 
+            {/* Camera Icon */}
+            <div className="flex items-center justify-center mb-3 text-zinc-900">
+              <Camera className="w-10 h-10 stroke-[1.5]" />
+            </div>
 
-            <h2 className="text-xl font-bold tracking-tight text-zinc-950 mb-1.5 mx-3">
-              Camera & Microphone Access Required
+            <h2 className="text-xl font-bold tracking-tight text-zinc-950 mb-1.5">
+              Camera & Microphone Access
             </h2>
-            <p className="text-xs text-zinc-500 mb-5 leading-relaxed">
-              Omeglo Video Chat is a genuine face-to-face platform. You must enable your camera and microphone to start video chatting.
+            <p className="text-xs text-zinc-500 mb-5 leading-relaxed max-w-xs">
+              Omeglo Video Chat connects you face-to-face. Enable your camera and microphone in your browser to start chatting.
             </p>
 
-            {/* macOS & Browser Troubleshooting Guide Box */}
-            <div className="w-full bg-zinc-50 border border-zinc-200/80 rounded-2xl p-3.5 mb-5 text-left text-xs space-y-2.5">
-              <div className="flex items-start gap-2 text-zinc-700">
-                <Lock className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
+            {/* Troubleshooting Guide Box */}
+            <div className="w-full bg-zinc-50 border border-zinc-200/80 rounded-2xl p-4 mb-5 text-left text-xs space-y-3">
+              <div className="flex items-start gap-2.5 text-zinc-700">
+                <Lock className="w-4 h-4 text-zinc-700 shrink-0 mt-0.5" />
                 <span>
-                  <strong>1. Browser Address Bar:</strong> Click the lock/camera icon next to the URL and set Camera to <strong>&ldquo;Allow&rdquo;</strong>.
+                  <strong>1. Browser Address Bar:</strong> Click the lock/camera icon next to the URL and select <strong>&ldquo;Allow&rdquo;</strong> for Camera & Mic.
                 </span>
               </div>
-              <div className="flex items-start gap-2 text-zinc-700">
-                <Settings className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
+              <div className="flex items-start gap-2.5 text-zinc-700">
+                <Settings className="w-4 h-4 text-zinc-700 shrink-0 mt-0.5" />
                 <span>
-                  <strong>2. On macOS:</strong> Open <strong>System Settings ➡️ Privacy & Security ➡️ Camera</strong> and toggle your browser <strong>ON</strong>.
+                  <strong>2. System Settings:</strong> Ensure camera permissions are enabled for your browser in your device settings.
                 </span>
               </div>
-              <div className="flex items-start gap-2 text-zinc-500 text-[11px]">
-                <Info className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+              <div className="flex items-start gap-2 text-zinc-500 text-[11px] pt-0.5 border-t border-zinc-200/60">
+                <Info className="w-3.5 h-3.5 shrink-0 mt-0.5 text-zinc-400" />
                 <span>No camera? Switch to <strong>Text Mode</strong> to chat with text only.</span>
               </div>
             </div>
@@ -2139,7 +2144,7 @@ export default function Home({ initialMode }: { initialMode?: ChatMode } = {}) {
                 className="w-full h-11 rounded-xl bg-zinc-950 hover:bg-zinc-800 active:scale-[0.98] text-white text-xs font-semibold transition-all shadow-xs cursor-pointer flex items-center justify-center gap-2"
               >
                 <Camera className="w-3.5 h-3.5" />
-                <span>Grant Access & Start Video</span>
+                <span>Grant Access & Start</span>
               </button>
               <button
                 type="button"
@@ -2147,7 +2152,7 @@ export default function Home({ initialMode }: { initialMode?: ChatMode } = {}) {
                   setShowPermissionModal(false);
                   handleModeChange("text");
                 }}
-                className="w-full sm:w-auto h-11 px-4 rounded-xl bg-zinc-100 hover:bg-zinc-200 text-zinc-800 text-xs font-medium transition-colors cursor-pointer"
+                className="w-full sm:w-auto h-11 px-4 rounded-xl bg-zinc-100 hover:bg-zinc-200 text-zinc-700 text-xs font-medium transition-colors cursor-pointer"
               >
                 Use Text Mode
               </button>
@@ -2158,10 +2163,10 @@ export default function Home({ initialMode }: { initialMode?: ChatMode } = {}) {
 
       {/* FIRST-TIME GENDER SELECTION MODAL */}
       {showGenderModal && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
-          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-sm w-full border border-zinc-200 shadow-2xl flex flex-col items-center text-center">
+        <div className="fixed inset-0 z-50 bg-zinc-950/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-sm w-full border border-zinc-200/80 shadow-2xl flex flex-col items-center text-center">
             {/* Brand Logo Icon */}
-            <div className="w-14 h-14 flex items-center justify-center mb-3.5">
+            <div className="w-14 h-14 flex items-center justify-center mb-3">
               <Image
                 src="/logo.webp"
                 alt="Omeglo Icon"
@@ -2176,7 +2181,7 @@ export default function Home({ initialMode }: { initialMode?: ChatMode } = {}) {
               <OmegloWordmark size="text-[22px]" />
             </h2>
             <p className="text-xs text-zinc-500 mb-6 max-w-[250px] leading-relaxed">
-              Select your gender to personalize your random chat experience. Saved in your browser.
+              Select your gender to personalize your random chat experience. Saved privately in your browser.
             </p>
 
             {/* Custom SVG Gender Option Cards */}
@@ -2186,8 +2191,8 @@ export default function Home({ initialMode }: { initialMode?: ChatMode } = {}) {
                 type="button"
                 onClick={() => setTempSelectedGender("male")}
                 className={`group relative p-4 rounded-2xl border flex flex-col items-center gap-3 transition-all duration-150 cursor-pointer ${tempSelectedGender === "male"
-                  ? "border-zinc-950 bg-zinc-50/80 ring-2 ring-zinc-950 shadow-xs"
-                  : "border-zinc-200 hover:border-zinc-300 hover:bg-zinc-50/50"
+                  ? "border-zinc-950 bg-zinc-50 ring-1 ring-zinc-950 shadow-2xs"
+                  : "border-zinc-200/80 hover:border-zinc-300 hover:bg-zinc-50/50"
                   }`}
               >
                 {tempSelectedGender === "male" && (
@@ -2195,10 +2200,10 @@ export default function Home({ initialMode }: { initialMode?: ChatMode } = {}) {
                     <Check className="w-3 h-3 stroke-[3]" />
                   </div>
                 )}
-                <div className="w-18 h-18 flex items-center justify-center group-hover:scale-105 transition-transform">
+                <div className="w-16 h-16 flex items-center justify-center group-hover:scale-105 transition-transform">
                   <MaleAvatarIcon className="w-full h-full object-contain" />
                 </div>
-                <span className="text-xs font-semibold text-zinc-900 tracking-tight">
+                <span className="text-xs font-bold text-zinc-900 tracking-tight">
                   Male
                 </span>
               </button>
@@ -2208,8 +2213,8 @@ export default function Home({ initialMode }: { initialMode?: ChatMode } = {}) {
                 type="button"
                 onClick={() => setTempSelectedGender("female")}
                 className={`group relative p-4 rounded-2xl border flex flex-col items-center gap-3 transition-all duration-150 cursor-pointer ${tempSelectedGender === "female"
-                  ? "border-zinc-950 bg-zinc-50/80 ring-2 ring-zinc-950 shadow-xs"
-                  : "border-zinc-200 hover:border-zinc-300 hover:bg-zinc-50/50"
+                  ? "border-zinc-950 bg-zinc-50 ring-1 ring-zinc-950 shadow-2xs"
+                  : "border-zinc-200/80 hover:border-zinc-300 hover:bg-zinc-50/50"
                   }`}
               >
                 {tempSelectedGender === "female" && (
@@ -2217,10 +2222,10 @@ export default function Home({ initialMode }: { initialMode?: ChatMode } = {}) {
                     <Check className="w-3 h-3 stroke-[3]" />
                   </div>
                 )}
-                <div className="w-18 h-18 flex items-center justify-center group-hover:scale-105 transition-transform">
+                <div className="w-16 h-16 flex items-center justify-center group-hover:scale-105 transition-transform">
                   <FemaleAvatarIcon className="w-full h-full object-contain" />
                 </div>
-                <span className="text-xs font-semibold text-zinc-900 tracking-tight">
+                <span className="text-xs font-bold text-zinc-900 tracking-tight">
                   Female
                 </span>
               </button>
@@ -2240,13 +2245,13 @@ export default function Home({ initialMode }: { initialMode?: ChatMode } = {}) {
 
       {/* REPORT STRANGER MODAL */}
       {showReportModal && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
-          <div className="bg-white rounded-3xl p-6 sm:p-7 max-w-md w-full border border-zinc-200 shadow-2xl flex flex-col relative text-left">
+        <div className="fixed inset-0 z-50 bg-zinc-950/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl p-6 sm:p-7 max-w-md w-full border border-zinc-200/80 shadow-2xl flex flex-col relative text-left">
             {/* Close Button */}
             <button
               type="button"
               onClick={() => setShowReportModal(false)}
-              className="absolute top-5 right-5 p-1.5 rounded-full text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 transition-colors cursor-pointer"
+              className="absolute top-4 right-4 p-2 rounded-full text-zinc-400 hover:text-zinc-950 hover:bg-zinc-100 transition-colors cursor-pointer"
             >
               <X className="w-4 h-4" />
             </button>
@@ -2257,7 +2262,7 @@ export default function Home({ initialMode }: { initialMode?: ChatMode } = {}) {
                 Report Stranger
               </h2>
               <p className="text-xs text-zinc-500 mt-1 leading-relaxed">
-                Reports are anonymous. Select a reason below to disconnect and submit a report.
+                Reports are 100% anonymous. Select a reason below to disconnect and submit a safety report.
               </p>
             </div>
 
@@ -2278,11 +2283,11 @@ export default function Home({ initialMode }: { initialMode?: ChatMode } = {}) {
                     onClick={() => setReportReason(item.id)}
                     className={`w-full p-3 rounded-xl border text-left flex items-center justify-between gap-3 transition-all cursor-pointer ${isSelected
                       ? "border-zinc-950 bg-zinc-50 ring-1 ring-zinc-950 shadow-2xs"
-                      : "border-zinc-200 hover:border-zinc-300 hover:bg-zinc-50/50"
+                      : "border-zinc-200/80 hover:border-zinc-300 hover:bg-zinc-50/50"
                       }`}
                   >
                     <div className="flex-1 min-w-0">
-                      <div className="text-xs font-semibold text-zinc-900 leading-snug">
+                      <div className="text-xs font-bold text-zinc-900 leading-snug">
                         {item.label}
                       </div>
                       <div className="text-[11px] text-zinc-500 mt-0.5">
@@ -2312,7 +2317,7 @@ export default function Home({ initialMode }: { initialMode?: ChatMode } = {}) {
                 value={reportDetails}
                 onChange={(e) => setReportDetails(e.target.value)}
                 placeholder="Briefly describe what happened..."
-                className="w-full h-10 px-3.5 text-xs bg-zinc-50 border border-zinc-200 rounded-xl focus:outline-hidden focus:ring-1.5 focus:ring-zinc-950 focus:bg-white text-zinc-900 placeholder:text-zinc-400 transition-all"
+                className="w-full h-10 px-3.5 text-xs bg-zinc-50 border border-zinc-200/80 rounded-xl focus:outline-none focus:ring-1 focus:ring-zinc-950 focus:bg-white text-zinc-900 placeholder:text-zinc-400 transition-all"
               />
             </div>
 
@@ -2321,7 +2326,7 @@ export default function Home({ initialMode }: { initialMode?: ChatMode } = {}) {
               <button
                 type="button"
                 onClick={() => setShowReportModal(false)}
-                className="flex-1 h-10 rounded-xl bg-zinc-100 hover:bg-zinc-200/80 text-zinc-700 text-xs font-medium transition-colors cursor-pointer text-center"
+                className="flex-1 h-11 rounded-xl bg-zinc-100 hover:bg-zinc-200 text-zinc-700 text-xs font-medium transition-colors cursor-pointer text-center"
               >
                 Cancel
               </button>
@@ -2329,7 +2334,7 @@ export default function Home({ initialMode }: { initialMode?: ChatMode } = {}) {
                 type="button"
                 disabled={isSubmittingReport}
                 onClick={handleSubmitReport}
-                className="flex-1 h-10 rounded-xl bg-zinc-950 hover:bg-zinc-800 active:scale-[0.98] text-white text-xs font-semibold transition-all shadow-xs cursor-pointer flex items-center justify-center disabled:opacity-50"
+                className="flex-1 h-11 rounded-xl bg-zinc-950 hover:bg-zinc-800 active:scale-[0.98] text-white text-xs font-semibold transition-all shadow-xs cursor-pointer flex items-center justify-center disabled:opacity-50"
               >
                 Submit Report
               </button>
