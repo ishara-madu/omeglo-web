@@ -135,44 +135,45 @@ export default function SeoContentSection() {
         </div>
       </div>
 
-      {/* 3. Visual Product Preview & Showcase */}
-      <div className="space-y-8 sm:space-y-10 py-6 sm:py-10">
-        <div className="max-w-3xl mx-auto text-center space-y-3">
+      {/* 3. Visual Product Preview & Highlights */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-center py-4 sm:py-6">
+        {/* Left Column: Image on Desktop */}
+        <div className="order-2 lg:order-1 lg:col-span-7">
+          <div className="relative rounded-xl overflow-hidden border border-zinc-200/80 shadow-md bg-zinc-950">
+            <Image
+              src="/opengraph-image.webp"
+              alt="Omeglo Live Video Chat Experience"
+              width={1200}
+              height={630}
+              className="w-full h-auto object-cover"
+            />
+          </div>
+        </div>
+
+        {/* Right Column: Description on Desktop (Opposite of FAQ title) */}
+        <div className="order-1 lg:order-2 lg:col-span-5 space-y-4">
           <span className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
             Next-Gen Live Experience
           </span>
-          <h2 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-zinc-950 tracking-tight leading-tight">
+          <h2 className="text-2xl sm:text-3xl font-extrabold text-zinc-950 tracking-tight leading-tight">
             Connect Globally with Zero Friction
           </h2>
-          <p className="text-xs sm:text-sm text-zinc-600 leading-relaxed max-w-2xl mx-auto">
-            Omeglo brings you seamless, high-definition random video and anonymous text chatting directly in your browser with instant matchmaking, automated AI moderation, and encrypted WebRTC connections.
+          <p className="text-xs sm:text-sm text-zinc-600 leading-relaxed">
+            Omeglo brings you seamless, high-definition random video and anonymous text chatting directly in your browser. With instant matchmaking, automated AI moderation, and encrypted P2P connections, talking with strangers worldwide has never been faster or safer.
           </p>
-        </div>
-
-        {/* Large Prominent Showcase Image */}
-        <div className="relative rounded-2xl sm:rounded-3xl overflow-hidden border border-zinc-200/80 shadow-xl bg-zinc-950 max-w-5xl mx-auto">
-          <Image
-            src="/opengraph-image.webp"
-            alt="Omeglo Live Video Chat Experience"
-            width={1200}
-            height={630}
-            className="w-full h-auto object-cover"
-          />
-        </div>
-
-        {/* Key Highlights under image */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 max-w-4xl mx-auto text-center pt-2">
-          <div className="space-y-1">
-            <h3 className="text-xs sm:text-sm font-bold text-zinc-950">Instant 0s Matching</h3>
-            <p className="text-xs text-zinc-500">Connect in real-time across 190+ countries</p>
-          </div>
-          <div className="space-y-1">
-            <h3 className="text-xs sm:text-sm font-bold text-zinc-950">Encrypted P2P Streams</h3>
-            <p className="text-xs text-zinc-500">Direct WebRTC without video recording</p>
-          </div>
-          <div className="space-y-1">
-            <h3 className="text-xs sm:text-sm font-bold text-zinc-950">100% Anonymous</h3>
-            <p className="text-xs text-zinc-500">Zero registration, profiles, or passwords</p>
+          <div className="space-y-2.5 pt-1 text-xs sm:text-sm text-zinc-700">
+            <div className="flex items-center gap-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+              <span>Instant 0-second matching with active global strangers</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+              <span>Peer-to-peer encrypted WebRTC video streaming</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+              <span>100% anonymous with zero registration or logins</span>
+            </div>
           </div>
         </div>
       </div>

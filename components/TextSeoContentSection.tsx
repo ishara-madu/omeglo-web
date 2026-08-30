@@ -141,44 +141,45 @@ export default function TextSeoContentSection() {
         </div>
       </div>
 
-      {/* 3. Visual Product Preview & Showcase */}
-      <div className="space-y-8 sm:space-y-10 py-6 sm:py-10">
-        <div className="max-w-3xl mx-auto text-center space-y-3">
+      {/* 3. Visual Product Preview & Highlights */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-center py-4 sm:py-6">
+        {/* Left Column: Image on Desktop */}
+        <div className="order-2 lg:order-1 lg:col-span-7">
+          <div className="relative rounded-xl overflow-hidden border border-zinc-200/80 shadow-md bg-zinc-950">
+            <Image
+              src="/opengraph-image.webp"
+              alt="Omeglo Anonymous Chat Experience"
+              width={1200}
+              height={630}
+              className="w-full h-auto object-cover"
+            />
+          </div>
+        </div>
+
+        {/* Right Column: Description on Desktop (Opposite of FAQ title) */}
+        <div className="order-1 lg:order-2 lg:col-span-5 space-y-4">
           <span className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
             Instant Anonymous Connections
           </span>
-          <h2 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-zinc-950 tracking-tight leading-tight">
+          <h2 className="text-2xl sm:text-3xl font-extrabold text-zinc-950 tracking-tight leading-tight">
             Talk to Strangers Privately from Anywhere
           </h2>
-          <p className="text-xs sm:text-sm text-zinc-600 leading-relaxed max-w-2xl mx-auto">
+          <p className="text-xs sm:text-sm text-zinc-600 leading-relaxed">
             Whether you prefer anonymous text conversations or live video chatting, Omeglo gives you the fastest and safest platform to meet people across 190+ countries with zero registration or personal details.
           </p>
-        </div>
-
-        {/* Large Prominent Showcase Image */}
-        <div className="relative rounded-2xl sm:rounded-3xl overflow-hidden border border-zinc-200/80 shadow-xl bg-zinc-950 max-w-5xl mx-auto">
-          <Image
-            src="/opengraph-image.webp"
-            alt="Omeglo Anonymous Chat Experience"
-            width={1200}
-            height={630}
-            className="w-full h-auto object-cover"
-          />
-        </div>
-
-        {/* Key Highlights under image */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 max-w-4xl mx-auto text-center pt-2">
-          <div className="space-y-1">
-            <h3 className="text-xs sm:text-sm font-bold text-zinc-950">Camera-Free Chat</h3>
-            <p className="text-xs text-zinc-500">Pure text messaging with zero webcam anxiety</p>
-          </div>
-          <div className="space-y-1">
-            <h3 className="text-xs sm:text-sm font-bold text-zinc-950">AI Toxicity Shield</h3>
-            <p className="text-xs text-zinc-500">Automated spam and profanity protection</p>
-          </div>
-          <div className="space-y-1">
-            <h3 className="text-xs sm:text-sm font-bold text-zinc-950">Switch Modes Anytime</h3>
-            <p className="text-xs text-zinc-500">Seamlessly jump between text and video</p>
+          <div className="space-y-2.5 pt-1 text-xs sm:text-sm text-zinc-700">
+            <div className="flex items-center gap-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+              <span>Camera-free private text mode with instant delivery</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+              <span>AI toxicity & spam filters for clean, friendly chats</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+              <span>Seamlessly switch between text and video anytime</span>
+            </div>
           </div>
         </div>
       </div>
