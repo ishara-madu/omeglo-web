@@ -15,7 +15,7 @@ export const metadata: Metadata = {
 
 export default function PrivacyPage() {
   return (
-    <div className="min-h-screen flex flex-col bg-zinc-50 text-zinc-900 font-sans">
+    <div className="min-h-screen flex flex-col bg-white text-zinc-900 font-sans">
       {/* Header */}
       <header className="w-full bg-white/95 backdrop-blur-md border-b border-zinc-200/70 sticky top-0 z-30">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
@@ -34,16 +34,15 @@ export default function PrivacyPage() {
       </header>
 
       {/* Main Content */}
-      <main className="flex-1 max-w-4xl w-full mx-auto px-4 sm:px-6 py-10 sm:py-14 space-y-8">
+      <main className="flex-1 max-w-4xl w-full mx-auto px-4 sm:px-6 py-10 sm:py-14 space-y-10">
         <div className="space-y-2 border-b border-zinc-200 pb-6">
-          <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[11px] font-semibold">
-            <Lock className="w-3 h-3" />
-            <span>End-to-End P2P Privacy</span>
+          <div className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
+            End-to-End P2P Privacy
           </div>
           <h1 className="text-2xl sm:text-3xl font-extrabold text-zinc-950 tracking-tight">
             Omeglo Privacy Policy
           </h1>
-          <p className="text-xs text-zinc-400">
+          <p className="text-xs sm:text-sm text-zinc-500">
             Last Updated: August 2026 • Effective Immediately
           </p>
         </div>
@@ -51,7 +50,7 @@ export default function PrivacyPage() {
         <div className="prose prose-zinc max-w-none text-xs sm:text-sm space-y-6 text-zinc-700 leading-relaxed">
           <section className="space-y-2">
             <h2 className="text-base font-bold text-zinc-950 flex items-center gap-2">
-              <EyeOff className="w-4 h-4 text-zinc-600" />
+              <EyeOff className="w-4 h-4 text-zinc-900" />
               1. 100% Anonymous by Design
             </h2>
             <p>
@@ -61,7 +60,7 @@ export default function PrivacyPage() {
 
           <section className="space-y-2">
             <h2 className="text-base font-bold text-zinc-950 flex items-center gap-2">
-              <Server className="w-4 h-4 text-zinc-600" />
+              <Server className="w-4 h-4 text-zinc-900" />
               2. Peer-to-Peer (WebRTC) Video & Audio
             </h2>
             <p>
@@ -71,7 +70,7 @@ export default function PrivacyPage() {
 
           <section className="space-y-2">
             <h2 className="text-base font-bold text-zinc-950 flex items-center gap-2">
-              <Shield className="w-4 h-4 text-zinc-600" />
+              <Shield className="w-4 h-4 text-zinc-900" />
               3. Text Messages & Automated Moderation
             </h2>
             <p>
@@ -81,7 +80,7 @@ export default function PrivacyPage() {
 
           <section className="space-y-2">
             <h2 className="text-base font-bold text-zinc-950 flex items-center gap-2">
-              <Cookie className="w-4 h-4 text-zinc-600" />
+              <Cookie className="w-4 h-4 text-zinc-900" />
               4. Technical Logs & Abuse Prevention
             </h2>
             <p>

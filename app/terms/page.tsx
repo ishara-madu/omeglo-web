@@ -15,7 +15,7 @@ export const metadata: Metadata = {
 
 export default function TermsPage() {
   return (
-    <div className="min-h-screen flex flex-col bg-zinc-50 text-zinc-900 font-sans">
+    <div className="min-h-screen flex flex-col bg-white text-zinc-900 font-sans">
       {/* Header */}
       <header className="w-full bg-white/95 backdrop-blur-md border-b border-zinc-200/70 sticky top-0 z-30">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
@@ -34,16 +34,15 @@ export default function TermsPage() {
       </header>
 
       {/* Main Content */}
-      <main className="flex-1 max-w-4xl w-full mx-auto px-4 sm:px-6 py-10 sm:py-14 space-y-8">
+      <main className="flex-1 max-w-4xl w-full mx-auto px-4 sm:px-6 py-10 sm:py-14 space-y-10">
         <div className="space-y-2 border-b border-zinc-200 pb-6">
-          <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-zinc-900 text-white text-[11px] font-semibold">
-            <Scale className="w-3 h-3" />
-            <span>User Agreement</span>
+          <div className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
+            User Agreement
           </div>
           <h1 className="text-2xl sm:text-3xl font-extrabold text-zinc-950 tracking-tight">
             Omeglo Terms of Service
           </h1>
-          <p className="text-xs text-zinc-400">
+          <p className="text-xs sm:text-sm text-zinc-500">
             Last Updated: August 2026 • Please read these terms carefully before using Omeglo.
           </p>
         </div>
@@ -51,7 +50,7 @@ export default function TermsPage() {
         <div className="prose prose-zinc max-w-none text-xs sm:text-sm space-y-6 text-zinc-700 leading-relaxed">
           <section className="space-y-2">
             <h2 className="text-base font-bold text-zinc-950 flex items-center gap-2">
-              <UserCheck className="w-4 h-4 text-zinc-600" />
+              <UserCheck className="w-4 h-4 text-zinc-900" />
               1. Minimum Age Requirement (18+)
             </h2>
             <p>
@@ -61,7 +60,7 @@ export default function TermsPage() {
 
           <section className="space-y-2">
             <h2 className="text-base font-bold text-zinc-950 flex items-center gap-2">
-              <ShieldAlert className="w-4 h-4 text-red-600" />
+              <ShieldAlert className="w-4 h-4 text-zinc-900" />
               2. Prohibited Conduct & Content
             </h2>
             <p>
@@ -78,7 +77,7 @@ export default function TermsPage() {
 
           <section className="space-y-2">
             <h2 className="text-base font-bold text-zinc-950 flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 text-zinc-600" />
+              <AlertCircle className="w-4 h-4 text-zinc-900" />
               3. Moderation & Termination
             </h2>
             <p>

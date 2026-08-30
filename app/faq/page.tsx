@@ -84,7 +84,7 @@ const faqSchema = {
 
 export default function FAQPage() {
   return (
-    <div className="min-h-screen flex flex-col bg-zinc-50 text-zinc-900 font-sans">
+    <div className="min-h-screen flex flex-col bg-white text-zinc-900 font-sans">
       {/* Schema.org FAQ JSON-LD for Google Rich Snippets */}
       <script
         type="application/ld+json"
@@ -111,14 +111,13 @@ export default function FAQPage() {
       {/* Main Content */}
       <main className="flex-1 max-w-4xl w-full mx-auto px-4 sm:px-6 py-10 sm:py-14 space-y-10">
         <div className="space-y-2 border-b border-zinc-200 pb-6">
-          <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-zinc-900 text-white text-[11px] font-semibold">
-            <HelpCircle className="w-3 h-3" />
-            <span>Help Center & FAQ</span>
+          <div className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
+            Help Center & FAQ
           </div>
           <h1 className="text-2xl sm:text-3xl font-extrabold text-zinc-950 tracking-tight">
             Frequently Asked Questions
           </h1>
-          <p className="text-xs sm:text-sm text-zinc-500">
+          <p className="text-xs sm:text-sm text-zinc-600">
             Find answers to common questions about using Omeglo, video chat features, privacy, and safety.
           </p>
         </div>
@@ -126,19 +125,19 @@ export default function FAQPage() {
         <div className="space-y-10">
           {faqItems.map((category, idx) => (
             <div key={idx} className="space-y-4">
-              <h2 className="text-sm sm:text-base font-bold text-zinc-950">
+              <h2 className="text-base font-bold text-zinc-950 border-b border-zinc-200/80 pb-2">
                 {category.category}
               </h2>
-              <div className="space-y-3">
+              <div className="divide-y divide-zinc-100">
                 {category.items.map((item, itemIdx) => (
                   <div
                     key={itemIdx}
-                    className="bg-white p-5 rounded-2xl border border-zinc-200/80 shadow-2xs space-y-1.5"
+                    className="py-4 space-y-1.5"
                   >
-                    <h3 className="text-xs sm:text-sm font-semibold text-zinc-900">
+                    <h3 className="text-sm font-semibold text-zinc-900">
                       {item.q}
                     </h3>
-                    <p className="text-xs text-zinc-600 leading-relaxed">
+                    <p className="text-xs sm:text-sm text-zinc-600 leading-relaxed">
                       {item.a}
                     </p>
                   </div>
