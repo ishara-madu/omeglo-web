@@ -4,17 +4,10 @@ import { useState } from "react";
 import Link from "next/link";
 import {
   Video,
-  MessageSquare,
   ShieldCheck,
-  Zap,
-  Globe,
-  Sparkles,
   ChevronDown,
   Lock,
   UserCheck,
-  HeartHandshake,
-  CheckCircle2,
-  HelpCircle,
 } from "lucide-react";
 
 interface FAQItem {
@@ -85,9 +78,8 @@ export default function SeoContentSection() {
 
       {/* 1. Hero SEO Heading & Overview */}
       <div className="text-center max-w-3xl mx-auto space-y-4">
-        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-zinc-100 border border-zinc-200/80 text-zinc-700 text-xs font-semibold">
-          <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-          <span>The #1 Next-Generation Omegle Alternative</span>
+        <div className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
+          The #1 Next-Generation Omegle Alternative
         </div>
 
         <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-zinc-950 tracking-tight leading-tight">
@@ -100,95 +92,81 @@ export default function SeoContentSection() {
       </div>
 
       {/* 2. Core Features Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-        <div className="bg-white p-5 sm:p-6 rounded-2xl border border-zinc-200/80 shadow-2xs hover:border-zinc-300 transition-all">
-          <div className="w-10 h-10 rounded-xl bg-zinc-950 text-white flex items-center justify-center mb-4">
-            <Video className="w-5 h-5" />
-          </div>
-          <h2 className="text-sm font-bold text-zinc-950 mb-1.5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
+        <div className="space-y-2">
+          <Video className="w-6 h-6 text-zinc-900 mb-2" />
+          <h2 className="text-base font-bold text-zinc-950">
             Instant HD Video Chat
           </h2>
-          <p className="text-xs text-zinc-500 leading-relaxed">
+          <p className="text-xs sm:text-sm text-zinc-600 leading-relaxed">
             Crystal clear video calls with zero latency powered by direct WebRTC peer-to-peer streaming.
           </p>
         </div>
 
-        <div className="bg-white p-5 sm:p-6 rounded-2xl border border-zinc-200/80 shadow-2xs hover:border-zinc-300 transition-all">
-          <div className="w-10 h-10 rounded-xl bg-zinc-950 text-white flex items-center justify-center mb-4">
-            <Lock className="w-5 h-5" />
-          </div>
-          <h2 className="text-sm font-bold text-zinc-950 mb-1.5">
+        <div className="space-y-2">
+          <Lock className="w-6 h-6 text-zinc-900 mb-2" />
+          <h2 className="text-base font-bold text-zinc-950">
             100% Private & Anonymous
           </h2>
-          <p className="text-xs text-zinc-500 leading-relaxed">
+          <p className="text-xs sm:text-sm text-zinc-600 leading-relaxed">
             No signup, registration, or credit card required. Your personal identity stays completely anonymous.
           </p>
         </div>
 
-        <div className="bg-white p-5 sm:p-6 rounded-2xl border border-zinc-200/80 shadow-2xs hover:border-zinc-300 transition-all">
-          <div className="w-10 h-10 rounded-xl bg-zinc-950 text-white flex items-center justify-center mb-4">
-            <UserCheck className="w-5 h-5" />
-          </div>
-          <h2 className="text-sm font-bold text-zinc-950 mb-1.5">
+        <div className="space-y-2">
+          <UserCheck className="w-6 h-6 text-zinc-900 mb-2" />
+          <h2 className="text-base font-bold text-zinc-950">
             Gender Match Preference
           </h2>
-          <p className="text-xs text-zinc-500 leading-relaxed">
+          <p className="text-xs sm:text-sm text-zinc-600 leading-relaxed">
             Select your chat preference to find female, male, or open random chat matches effortlessly.
           </p>
         </div>
 
-        <div className="bg-white p-5 sm:p-6 rounded-2xl border border-zinc-200/80 shadow-2xs hover:border-zinc-300 transition-all">
-          <div className="w-10 h-10 rounded-xl bg-zinc-950 text-white flex items-center justify-center mb-4">
-            <ShieldCheck className="w-5 h-5" />
-          </div>
-          <h2 className="text-sm font-bold text-zinc-950 mb-1.5">
+        <div className="space-y-2">
+          <ShieldCheck className="w-6 h-6 text-zinc-900 mb-2" />
+          <h2 className="text-base font-bold text-zinc-950">
             AI Automated Safety
           </h2>
-          <p className="text-xs text-zinc-500 leading-relaxed">
+          <p className="text-xs sm:text-sm text-zinc-600 leading-relaxed">
             Real-time automated content filtering and swift one-click stranger reporting keep interactions friendly.
           </p>
         </div>
       </div>
 
       {/* 3. How to Use Omeglo (3 Easy Steps) */}
-      <div className="bg-zinc-950 text-white rounded-3xl p-6 sm:p-10 lg:p-12 relative overflow-hidden">
-        <div className="max-w-2xl mb-8">
-          <span className="text-xs font-semibold uppercase tracking-wider text-emerald-400">
+      <div className="space-y-8">
+        <div className="max-w-2xl">
+          <span className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
             Quick Start Guide
           </span>
-          <h2 className="text-xl sm:text-2xl font-bold tracking-tight mt-1 text-white">
+          <h2 className="text-xl sm:text-2xl font-bold tracking-tight mt-1 text-zinc-950">
             How to Start Chatting on Omeglo in 3 Steps
           </h2>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 relative z-10">
-          <div className="space-y-2 bg-zinc-900/80 border border-zinc-800 rounded-2xl p-5">
-            <div className="w-7 h-7 rounded-full bg-white text-zinc-950 font-bold text-xs flex items-center justify-center">
-              1
-            </div>
-            <h3 className="text-sm font-bold text-white">Choose Chat Mode</h3>
-            <p className="text-xs text-zinc-400 leading-relaxed">
-              Select <strong>Video Chat</strong> to meet people face-to-face or <strong>Text Chat</strong> for camera-free anonymous messaging.
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          <div className="space-y-2">
+            <span className="text-2xl font-black text-zinc-300">01</span>
+            <h3 className="text-base font-bold text-zinc-950">Choose Chat Mode</h3>
+            <p className="text-xs sm:text-sm text-zinc-600 leading-relaxed">
+              Select <strong className="text-zinc-900">Video Chat</strong> to meet people face-to-face or <strong className="text-zinc-900">Text Chat</strong> for camera-free anonymous messaging.
             </p>
           </div>
 
-          <div className="space-y-2 bg-zinc-900/80 border border-zinc-800 rounded-2xl p-5">
-            <div className="w-7 h-7 rounded-full bg-white text-zinc-950 font-bold text-xs flex items-center justify-center">
-              2
-            </div>
-            <h3 className="text-sm font-bold text-white">Allow Permissions</h3>
-            <p className="text-xs text-zinc-400 leading-relaxed">
+          <div className="space-y-2">
+            <span className="text-2xl font-black text-zinc-300">02</span>
+            <h3 className="text-base font-bold text-zinc-950">Allow Permissions</h3>
+            <p className="text-xs sm:text-sm text-zinc-600 leading-relaxed">
               When prompted by your browser, allow Camera & Mic access (all video is direct P2P and never recorded).
             </p>
           </div>
 
-          <div className="space-y-2 bg-zinc-900/80 border border-zinc-800 rounded-2xl p-5">
-            <div className="w-7 h-7 rounded-full bg-white text-zinc-950 font-bold text-xs flex items-center justify-center">
-              3
-            </div>
-            <h3 className="text-sm font-bold text-white">Click Start & Enjoy</h3>
-            <p className="text-xs text-zinc-400 leading-relaxed">
-              Hit <strong>Start Chat</strong> to instantly meet a new stranger. Press <strong>Skip</strong> or <strong>Esc</strong> anytime to find someone new.
+          <div className="space-y-2">
+            <span className="text-2xl font-black text-zinc-300">03</span>
+            <h3 className="text-base font-bold text-zinc-950">Click Start & Enjoy</h3>
+            <p className="text-xs sm:text-sm text-zinc-600 leading-relaxed">
+              Hit <strong className="text-zinc-900">Start Chat</strong> to instantly meet a new stranger. Press <strong className="text-zinc-900">Skip</strong> or <strong className="text-zinc-900">Esc</strong> anytime to find someone new.
             </p>
           </div>
         </div>
@@ -197,32 +175,28 @@ export default function SeoContentSection() {
       {/* 4. Frequently Asked Questions (FAQ) with Accordions */}
       <div className="max-w-3xl mx-auto space-y-6">
         <div className="text-center space-y-2">
-          <div className="inline-flex items-center gap-1.5 text-xs font-semibold text-zinc-500 uppercase tracking-wider">
-            <HelpCircle className="w-4 h-4 text-zinc-600" />
-            <span>Got Questions?</span>
-          </div>
+          <span className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
+            Got Questions?
+          </span>
           <h2 className="text-xl sm:text-2xl font-bold text-zinc-950 tracking-tight">
             Frequently Asked Questions
           </h2>
-          <p className="text-xs sm:text-sm text-zinc-500">
+          <p className="text-xs sm:text-sm text-zinc-600">
             Everything you need to know about using Omeglo safely and anonymously.
           </p>
         </div>
 
-        <div className="space-y-3 pt-2">
+        <div className="divide-y divide-zinc-200/80 border-y border-zinc-200/80 pt-2">
           {faqs.map((faq, index) => {
             const isOpen = openFaqIndex === index;
             return (
-              <div
-                key={index}
-                className="bg-white border border-zinc-200/80 rounded-2xl overflow-hidden transition-all shadow-2xs"
-              >
+              <div key={index} className="py-4">
                 <button
                   type="button"
                   onClick={() => toggleFaq(index)}
-                  className="w-full px-5 py-4 text-left flex items-center justify-between gap-4 cursor-pointer hover:bg-zinc-50/50 transition-colors"
+                  className="w-full text-left flex items-center justify-between gap-4 cursor-pointer"
                 >
-                  <span className="text-xs sm:text-sm font-semibold text-zinc-900">
+                  <span className="text-sm sm:text-base font-semibold text-zinc-900">
                     {faq.question}
                   </span>
                   <ChevronDown
@@ -232,7 +206,7 @@ export default function SeoContentSection() {
                   />
                 </button>
                 {isOpen && (
-                  <div className="px-5 pb-4 text-xs text-zinc-600 leading-relaxed border-t border-zinc-100 pt-3 animate-in fade-in duration-150">
+                  <div className="pt-3 text-xs sm:text-sm text-zinc-600 leading-relaxed animate-in fade-in duration-150">
                     {faq.answer}
                   </div>
                 )}

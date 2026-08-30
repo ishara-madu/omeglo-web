@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import Image from "next/image";
-import { ArrowLeft, HelpCircle, Video, MessageSquare, Shield, Lock, Sparkles } from "lucide-react";
+import { ArrowLeft, HelpCircle, Video, MessageSquare, Shield, Lock } from "lucide-react";
 import Footer from "@/components/Footer";
 
 export const metadata: Metadata = {
@@ -126,8 +126,7 @@ export default function FAQPage() {
         <div className="space-y-10">
           {faqItems.map((category, idx) => (
             <div key={idx} className="space-y-4">
-              <h2 className="text-sm sm:text-base font-bold text-zinc-950 flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-zinc-500" />
+              <h2 className="text-sm sm:text-base font-bold text-zinc-950">
                 {category.category}
               </h2>
               <div className="space-y-3">
