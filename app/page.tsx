@@ -2862,15 +2862,15 @@ export default function Home({ initialMode }: { initialMode?: ChatMode } = {}) {
                   </div>
                 </div>
 
-                {/* Fallback View if Permission Pending on Local Cam (Clean White Centered Button, Zero Icon) */}
+                {/* Fallback View if Permission Pending on Local Cam */}
                 {!isSwappedFeeds && (!localStream || hasCameraPermission === false) && (
-                  <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none p-2">
+                  <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none p-2 text-center">
                     <button
                       type="button"
                       onClick={() => setShowPermissionModal(true)}
-                      className="pointer-events-auto px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 text-white font-medium text-[10px] sm:text-xs tracking-tight shadow-md backdrop-blur-md hover:scale-105 active:scale-95 transition-all cursor-pointer select-none text-center"
+                      className="pointer-events-auto text-zinc-400 hover:text-white text-[11px] sm:text-xs font-medium tracking-tight transition-colors cursor-pointer select-none"
                     >
-                      Enable Cam
+                      Turn on camera
                     </button>
                   </div>
                 )}
