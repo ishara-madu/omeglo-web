@@ -12,9 +12,72 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://omeglo.com";
+
 export const metadata: Metadata = {
-  title: "Omeglo - Random Video Chat with Strangers",
-  description: "The best minimalist alternative to Omegle",
+  metadataBase: new URL(siteUrl),
+  title: {
+    default: "Omeglo - Free Random Video Chat with Strangers | Omegle Alternative",
+    template: "%s | Omeglo",
+  },
+  description:
+    "Talk to strangers instantly on Omeglo, the best free Omegle alternative. Enjoy 1-on-1 random video chat, anonymous text chat, gender filter, and private P2P connections without registration.",
+  keywords: [
+    "omegle alternative",
+    "random video chat",
+    "talk to strangers",
+    "free cam chat",
+    "anonymous text chat",
+    "stranger chat",
+    "online video chat",
+    "video chat with strangers",
+    "omegle replacement",
+    "omeglo",
+    "free random chat",
+  ],
+  authors: [{ name: "Omeglo", url: siteUrl }],
+  creator: "Omeglo",
+  publisher: "Omeglo",
+  applicationName: "Omeglo",
+  category: "communication",
+  alternates: {
+    canonical: "/",
+  },
+  openGraph: {
+    type: "website",
+    locale: "en_US",
+    url: siteUrl,
+    siteName: "Omeglo",
+    title: "Omeglo - Free Random Video Chat with Strangers",
+    description:
+      "Instant 1-on-1 random video and text chat with people worldwide. No signup required, 100% free and private.",
+    images: [
+      {
+        url: "/opengraph-image.webp",
+        width: 1200,
+        height: 630,
+        alt: "Omeglo - Free Random Video & Text Chat with Strangers",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Omeglo - Free Random Video Chat with Strangers",
+    description:
+      "Instant 1-on-1 random video and text chat with people worldwide. Best Omegle alternative.",
+    images: ["/opengraph-image.webp"],
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-video-preview": -1,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+    },
+  },
   icons: {
     icon: [
       { url: "/favicon.ico" },
@@ -32,6 +95,49 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
+  themeColor: "#09090b",
+};
+
+const jsonLd = {
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "WebSite",
+      "@id": `${siteUrl}/#website`,
+      url: siteUrl,
+      name: "Omeglo",
+      description: "Free random video chat and anonymous text chat with strangers.",
+      publisher: {
+        "@type": "Organization",
+        name: "Omeglo",
+        url: siteUrl,
+        logo: {
+          "@type": "ImageObject",
+          url: `${siteUrl}/logo.webp`,
+        },
+      },
+    },
+    {
+      "@type": "WebApplication",
+      "@id": `${siteUrl}/#webapp`,
+      url: siteUrl,
+      name: "Omeglo - Random Video Chat",
+      applicationCategory: "CommunicationApplication",
+      operatingSystem: "All",
+      offers: {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "USD",
+      },
+      featureList: [
+        "Instant Random Video Chat",
+        "Anonymous Text Chat",
+        "Gender Preference Filter",
+        "Encrypted WebRTC P2P Connections",
+        "Automated NSFW & Toxicity Moderation",
+      ],
+    },
+  ],
 };
 
 export default function RootLayout({
@@ -45,6 +151,12 @@ export default function RootLayout({
       suppressHydrationWarning
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
+      <head>
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        />
+      </head>
       <body
         suppressHydrationWarning
         className="min-h-full flex flex-col bg-zinc-50 text-zinc-900 selection:bg-zinc-900 selection:text-white"
@@ -54,3 +166,4 @@ export default function RootLayout({
     </html>
   );
 }
+

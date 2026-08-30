@@ -1,0 +1,40 @@
+# Global Headers for Cloudflare Pages (Max SEO, Core Web Vitals & Security)
+/*
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: SAMEORIGIN
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(self "*"), microphone=(self "*"), display-capture=(self "*")
+  Strict-Transport-Security: max-age=31536000; includeSubDomains; preload
+
+# Edge Cache for Next.js Immutable Static Chunks & Media
+/_next/static/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/logo.webp
+  Cache-Control: public, max-age=31536000, immutable
+
+/opengraph-image.webp
+  Cache-Control: public, max-age=31536000, immutable
+
+/android-chrome-*
+  Cache-Control: public, max-age=31536000, immutable
+
+/favicon*
+  Cache-Control: public, max-age=31536000, immutable
+
+# Freshness for HTML pages to ensure crawlers get latest SEO changes immediately
+/*.html
+  Cache-Control: public, max-age=0, must-revalidate
+
+# Proper MIME Type & Cache for Search Engine Bots
+/sitemap.xml
+  Content-Type: application/xml; charset=utf-8
+  Cache-Control: public, max-age=3600, must-revalidate
+
+/robots.txt
+  Content-Type: text/plain; charset=utf-8
+  Cache-Control: public, max-age=3600, must-revalidate
+
+/site.webmanifest
+  Content-Type: application/manifest+json; charset=utf-8
+  Cache-Control: public, max-age=86400

@@ -54,6 +54,8 @@ import {
 import { getBrowserFingerprint } from "@/lib/fingerprint";
 import { filterMessage } from "@/lib/moderation/regexFilter";
 import { initToxicityDetector, checkTextToxicity } from "@/lib/moderation/toxicityDetector";
+import SeoContentSection from "@/components/SeoContentSection";
+import Footer from "@/components/Footer";
 
 type ChatMessage = {
   id: string;
@@ -3226,6 +3228,12 @@ export default function Home({ initialMode }: { initialMode?: ChatMode } = {}) {
           </form>
         </section>
       </main>
+
+      {/* SEO Content Section: H1 Heading, Features, How-To & FAQ */}
+      <SeoContentSection />
+
+      {/* Universal Footer */}
+      <Footer />
     </div>
   );
 }
