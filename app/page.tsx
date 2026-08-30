@@ -3236,7 +3236,11 @@ export default function Home({ initialMode }: { initialMode?: ChatMode } = {}) {
       </main>
 
       {/* SEO Content Section: Tailored dynamically based on Video vs Text Chat Mode */}
-      {chatMode === "text" ? <TextSeoContentSection /> : <SeoContentSection />}
+      {chatMode === "text" ? (
+        <TextSeoContentSection onSwitchMode={handleModeChange} />
+      ) : (
+        <SeoContentSection onSwitchMode={handleModeChange} />
+      )}
 
       {/* Universal Footer */}
       <Footer />

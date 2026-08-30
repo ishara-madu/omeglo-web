@@ -58,7 +58,11 @@ const faqSchema = {
   })),
 };
 
-export default function TextSeoContentSection() {
+export default function TextSeoContentSection({
+  onSwitchMode,
+}: {
+  onSwitchMode?: (mode: "video" | "text") => void;
+} = {}) {
   const [openFaqIndex, setOpenFaqIndex] = useState<number | null>(null);
 
   const toggleFaq = (index: number) => {
@@ -172,13 +176,21 @@ export default function TextSeoContentSection() {
             </div>
           </div>
           <div className="pt-2">
-            <Link
-              href="/"
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-zinc-950 text-white text-xs font-semibold hover:bg-zinc-800 transition-all shadow-xs"
+            <button
+              type="button"
+              onClick={() => {
+                if (onSwitchMode) {
+                  onSwitchMode("video");
+                  window.scrollTo({ top: 0, behavior: "smooth" });
+                } else if (typeof window !== "undefined") {
+                  window.location.href = "/";
+                }
+              }}
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-zinc-950 text-white text-xs font-semibold hover:bg-zinc-800 transition-all shadow-xs cursor-pointer"
             >
               <Video className="w-3.5 h-3.5" />
               <span>Switch to Video Mode</span>
-            </Link>
+            </button>
           </div>
         </div>
       </div>

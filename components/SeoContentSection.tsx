@@ -62,7 +62,11 @@ const faqSchema = {
   })),
 };
 
-export default function SeoContentSection() {
+export default function SeoContentSection({
+  onSwitchMode,
+}: {
+  onSwitchMode?: (mode: "video" | "text") => void;
+} = {}) {
   const [openFaqIndex, setOpenFaqIndex] = useState<number | null>(null);
 
   const toggleFaq = (index: number) => {
