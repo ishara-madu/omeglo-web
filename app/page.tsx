@@ -2501,13 +2501,17 @@ export default function Home({ initialMode }: { initialMode?: ChatMode } = {}) {
       </div>
 
       {/* Main Content Area */}
-      <main className="flex-1 max-w-7xl w-full mx-auto p-3 sm:p-5 lg:p-6 flex flex-col lg:grid lg:grid-cols-12 gap-4 lg:gap-6">
+      <main className="flex-1 max-w-7xl w-full mx-auto p-2.5 sm:p-5 lg:p-6 flex flex-col lg:grid lg:grid-cols-12 gap-3.5 sm:gap-4 lg:gap-6">
         {/* Left Section: Main Stage + Sleek Dock (8 Cols on Desktop) */}
-        <section className="lg:col-span-8 flex flex-col gap-3 sm:gap-4">
+        <section className="lg:col-span-8 flex flex-col gap-2.5 sm:gap-4">
           {/* Main Visual Stage (Video Feed in Video Mode, Interactive Dashboard in Text Mode) */}
           <div
             ref={containerRef}
-            className="relative w-full aspect-4/3 sm:aspect-16/10 lg:aspect-auto flex-1 min-h-[380px] sm:min-h-[480px] lg:min-h-[540px] bg-zinc-950 rounded-2xl overflow-hidden border border-zinc-800/80 shadow-xs flex flex-col items-center justify-center text-zinc-400"
+            className={`relative w-full ${
+              chatMode === "text"
+                ? "h-auto py-6 sm:py-8 lg:py-0 min-h-[160px] sm:min-h-[220px] lg:min-h-[540px] lg:flex-1"
+                : "aspect-4/3 sm:aspect-16/10 lg:aspect-auto flex-1 min-h-[320px] sm:min-h-[460px] lg:min-h-[540px]"
+            } bg-zinc-950 rounded-2xl overflow-hidden border border-zinc-800/80 shadow-xs flex flex-col items-center justify-center text-zinc-400`}
           >
             {/* VIDEO MODE: Instant Micro-Preview & Stranger Live WebRTC Video Element */}
             {chatMode === "video" && (
@@ -2965,7 +2969,7 @@ export default function Home({ initialMode }: { initialMode?: ChatMode } = {}) {
                 /* Sleek Start Button */
                 <button
                   onClick={handleStart}
-                  className="w-full sm:w-auto h-11 px-6 rounded-xl bg-zinc-950 hover:bg-zinc-800 active:scale-[0.98] text-white text-sm font-medium transition-all duration-150 flex items-center justify-center gap-2.5 shadow-xs cursor-pointer"
+                  className="w-full sm:w-auto h-12 sm:h-11 px-6 rounded-xl bg-zinc-950 hover:bg-zinc-800 active:scale-[0.98] text-white text-sm font-medium transition-all duration-150 flex items-center justify-center gap-2.5 shadow-xs cursor-pointer"
                 >
                   <Play className="w-4 h-4 fill-current" />
                   <span>Start {chatMode === "text" ? "Text Chat" : "Video Chat"}</span>
@@ -2981,7 +2985,7 @@ export default function Home({ initialMode }: { initialMode?: ChatMode } = {}) {
                     onClick={handleStop}
                     disabled={status === "disconnected"}
                     title="Stop / Disconnect"
-                    className={`h-11 px-3.5 sm:px-5 rounded-xl text-sm font-medium transition-all duration-150 flex items-center justify-center gap-1.5 sm:gap-2 cursor-pointer shrink-0 ${status === "disconnected"
+                    className={`h-12 sm:h-11 px-4 sm:px-5 rounded-xl text-sm font-medium transition-all duration-150 flex items-center justify-center gap-1.5 sm:gap-2 cursor-pointer shrink-0 ${status === "disconnected"
                       ? "bg-zinc-100 text-zinc-300 border border-zinc-200/50 cursor-not-allowed"
                       : "bg-zinc-100 hover:bg-red-50 hover:text-red-600 text-zinc-700 border border-zinc-200/70 active:scale-[0.98]"
                       }`}
@@ -2996,7 +3000,7 @@ export default function Home({ initialMode }: { initialMode?: ChatMode } = {}) {
                       type="button"
                       onClick={handleOpenReportModal}
                       title="Report Stranger"
-                      className="h-11 px-3 sm:px-3.5 rounded-xl text-xs font-semibold bg-red-50/80 hover:bg-red-100/90 text-red-600 border border-red-200/70 active:scale-[0.98] transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs shrink-0"
+                      className="h-12 sm:h-11 px-3 sm:px-3.5 rounded-xl text-xs font-semibold bg-red-50/80 hover:bg-red-100/90 text-red-600 border border-red-200/70 active:scale-[0.98] transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs shrink-0"
                     >
                       <Flag className="w-3.5 h-3.5 fill-red-500/20" />
                       <span className="hidden sm:inline">Report</span>
@@ -3008,7 +3012,7 @@ export default function Home({ initialMode }: { initialMode?: ChatMode } = {}) {
                     onClick={handleNext}
                     disabled={status === "searching" || isNextDisabled}
                     title={status === "searching" ? "Finding next stranger..." : "Next Stranger (Esc)"}
-                    className={`flex-1 sm:flex-none h-11 px-4 sm:px-6 rounded-xl text-sm font-medium transition-all duration-150 flex items-center justify-center gap-2 shadow-xs ${status === "searching" || isNextDisabled
+                    className={`flex-1 sm:flex-none h-12 sm:h-11 px-4 sm:px-6 rounded-xl text-sm font-medium transition-all duration-150 flex items-center justify-center gap-2 shadow-xs ${status === "searching" || isNextDisabled
                       ? "bg-zinc-800 text-zinc-400 opacity-60 cursor-not-allowed"
                       : "bg-zinc-950 hover:bg-zinc-800 active:scale-[0.98] text-white cursor-pointer"
                       }`}
@@ -3043,7 +3047,7 @@ export default function Home({ initialMode }: { initialMode?: ChatMode } = {}) {
                 type="button"
                 onClick={() => handleMatchPreferenceChange("any")}
                 title="Match with anyone"
-                className={`flex-1 sm:flex-none h-9 px-2.5 sm:px-3 rounded-lg text-xs font-medium flex items-center justify-center gap-1.5 transition-all duration-150 cursor-pointer ${matchPreference === "any"
+                className={`flex-1 sm:flex-none h-10 sm:h-9 px-2.5 sm:px-3 rounded-lg text-xs font-medium flex items-center justify-center gap-1.5 transition-all duration-150 cursor-pointer ${matchPreference === "any"
                   ? "bg-white text-zinc-950 shadow-2xs font-semibold ring-1 ring-zinc-200/80"
                   : "text-zinc-500 hover:text-zinc-900 hover:bg-white/50"
                   }`}
@@ -3059,7 +3063,7 @@ export default function Home({ initialMode }: { initialMode?: ChatMode } = {}) {
                 type="button"
                 onClick={() => handleMatchPreferenceChange("female")}
                 title="Filter for female strangers"
-                className={`flex-1 sm:flex-none h-9 px-2.5 sm:px-3 rounded-lg text-xs font-medium flex items-center justify-center gap-1.5 transition-all duration-150 cursor-pointer ${matchPreference === "female"
+                className={`flex-1 sm:flex-none h-10 sm:h-9 px-2.5 sm:px-3 rounded-lg text-xs font-medium flex items-center justify-center gap-1.5 transition-all duration-150 cursor-pointer ${matchPreference === "female"
                   ? "bg-white text-zinc-950 shadow-2xs font-semibold ring-1 ring-zinc-200/80"
                   : "text-zinc-500 hover:text-zinc-900 hover:bg-white/50"
                   }`}
@@ -3075,7 +3079,7 @@ export default function Home({ initialMode }: { initialMode?: ChatMode } = {}) {
                 type="button"
                 onClick={() => handleMatchPreferenceChange("male")}
                 title="Filter for male strangers"
-                className={`flex-1 sm:flex-none h-9 px-2.5 sm:px-3 rounded-lg text-xs font-medium flex items-center justify-center gap-1.5 transition-all duration-150 cursor-pointer ${matchPreference === "male"
+                className={`flex-1 sm:flex-none h-10 sm:h-9 px-2.5 sm:px-3 rounded-lg text-xs font-medium flex items-center justify-center gap-1.5 transition-all duration-150 cursor-pointer ${matchPreference === "male"
                   ? "bg-white text-zinc-950 shadow-2xs font-semibold ring-1 ring-zinc-200/80"
                   : "text-zinc-500 hover:text-zinc-900 hover:bg-white/50"
                   }`}
@@ -3207,7 +3211,7 @@ export default function Home({ initialMode }: { initialMode?: ChatMode } = {}) {
           </div>
 
           {/* Chat Input Box */}
-          <form onSubmit={handleSendMessage} className="p-2.5 bg-white border-t border-zinc-100 flex items-center gap-1.5">
+          <form onSubmit={handleSendMessage} className="p-2 sm:p-2.5 bg-white border-t border-zinc-100 flex items-center gap-2">
             <input
               ref={inputRef}
               type="text"
@@ -3219,17 +3223,17 @@ export default function Home({ initialMode }: { initialMode?: ChatMode } = {}) {
                   : "Connect to start chatting..."
               }
               disabled={status !== "connected"}
-              className="flex-1 bg-zinc-50 hover:bg-zinc-100/60 focus:bg-white text-xs text-zinc-900 placeholder:text-zinc-400 px-3 py-2 rounded-xl border border-zinc-200/80 focus:outline-none focus:ring-1 focus:ring-zinc-950 focus:border-zinc-950 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+              className="flex-1 bg-zinc-50 hover:bg-zinc-100/60 focus:bg-white text-base sm:text-xs text-zinc-900 placeholder:text-zinc-400 px-3.5 py-2.5 sm:py-2 rounded-xl border border-zinc-200/80 focus:outline-none focus:ring-1 focus:ring-zinc-950 focus:border-zinc-950 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
             />
             <button
               type="submit"
               disabled={!inputMessage.trim() || status !== "connected"}
-              className={`p-2 rounded-xl transition-all shadow-2xs ${inputMessage.trim() && status === "connected"
+              className={`h-10 w-10 sm:h-9 sm:w-9 rounded-xl flex items-center justify-center transition-all shadow-2xs shrink-0 ${inputMessage.trim() && status === "connected"
                 ? "bg-zinc-950 text-white hover:bg-zinc-800 active:scale-95 cursor-pointer"
                 : "bg-zinc-100 text-zinc-300 border border-zinc-200/40 cursor-not-allowed"
                 }`}
             >
-              <Send className="w-3.5 h-3.5" />
+              <Send className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
             </button>
           </form>
         </section>
