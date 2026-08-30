@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import {
   Video,
   ShieldCheck,
@@ -134,7 +135,48 @@ export default function SeoContentSection() {
         </div>
       </div>
 
-      {/* 3. How to Use Omeglo (3 Easy Steps) */}
+      {/* 3. Visual Product Preview & Highlights */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-center">
+        <div className="lg:col-span-5 space-y-4">
+          <span className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
+            Next-Gen Live Experience
+          </span>
+          <h2 className="text-2xl sm:text-3xl font-extrabold text-zinc-950 tracking-tight leading-tight">
+            Connect Globally with Zero Friction
+          </h2>
+          <p className="text-xs sm:text-sm text-zinc-600 leading-relaxed">
+            Omeglo brings you seamless, high-definition random video and anonymous text chatting directly in your browser. With instant matchmaking, AI moderation, and encrypted P2P connections, talking with strangers worldwide has never been faster or safer.
+          </p>
+          <div className="space-y-2.5 pt-1 text-xs sm:text-sm text-zinc-700">
+            <div className="flex items-center gap-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+              <span>Instant 0-second matching with active global strangers</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+              <span>Peer-to-peer encrypted WebRTC video streaming</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+              <span>100% anonymous with zero registration or logins</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="lg:col-span-7">
+          <div className="relative rounded-2xl sm:rounded-3xl overflow-hidden border border-zinc-200/80 shadow-md bg-zinc-950">
+            <Image
+              src="/opengraph-image.webp"
+              alt="Omeglo Live Video Chat Experience"
+              width={1200}
+              height={630}
+              className="w-full h-auto object-cover"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* 4. How to Use Omeglo (3 Easy Steps) */}
       <div className="bg-zinc-950 text-white rounded-3xl p-8 sm:p-10 lg:p-12 space-y-8">
         <div className="max-w-2xl">
           <span className="text-xs font-semibold uppercase tracking-wider text-zinc-400">

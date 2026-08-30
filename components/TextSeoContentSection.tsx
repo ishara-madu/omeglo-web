@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import {
   ShieldCheck,
   Zap,
@@ -140,7 +141,48 @@ export default function TextSeoContentSection() {
         </div>
       </div>
 
-      {/* 3. Why Choose Omeglo Text Chat */}
+      {/* 3. Visual Product Preview & Highlights */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-center">
+        <div className="lg:col-span-5 space-y-4">
+          <span className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
+            Instant Anonymous Connections
+          </span>
+          <h2 className="text-2xl sm:text-3xl font-extrabold text-zinc-950 tracking-tight leading-tight">
+            Talk to Strangers Privately from Anywhere
+          </h2>
+          <p className="text-xs sm:text-sm text-zinc-600 leading-relaxed">
+            Whether you prefer anonymous text conversations or live video chatting, Omeglo gives you the fastest and safest platform to meet people across 190+ countries with zero registration or personal details.
+          </p>
+          <div className="space-y-2.5 pt-1 text-xs sm:text-sm text-zinc-700">
+            <div className="flex items-center gap-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+              <span>Camera-free private text mode with instant delivery</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+              <span>AI toxicity & spam filters for clean, friendly chats</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+              <span>Seamlessly switch between text and video anytime</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="lg:col-span-7">
+          <div className="relative rounded-2xl sm:rounded-3xl overflow-hidden border border-zinc-200/80 shadow-md bg-zinc-950">
+            <Image
+              src="/opengraph-image.webp"
+              alt="Omeglo Anonymous Chat Experience"
+              width={1200}
+              height={630}
+              className="w-full h-auto object-cover"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* 4. Why Choose Omeglo Text Chat */}
       <div className="bg-zinc-950 text-white rounded-3xl p-8 sm:p-10 lg:p-12 space-y-8">
         <div className="max-w-2xl">
           <span className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
